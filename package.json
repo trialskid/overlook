@@ -1,6 +1,6 @@
 {
   "name": "overlook",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A status-first homelab dashboard: what broke, where on the network, and what to do next (Proxmox, Prometheus, Uptime Kuma, Grafana, Home Assistant, the *arr stack)",
   "license": "MIT",
   "repository": {
