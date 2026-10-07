@@ -1,0 +1,169 @@
+#!/bin/bash
+# apt-textfile v1.1 (Overlook module apt; keeps the security "since" on a failed run)
+#
+# Writes apt.prom for node_exporter's textfile collector:
+#   - the pinned upstream apt_info.py (prometheus-community/node-exporter-textfile-collector-scripts,
+#     commit 9517d9d0, sha256 below): apt_upgrades_pending{origin,arch}, apt_upgrades_held,
+#     apt_autoremove_pending, apt_packages_obsolete, apt_packages_per_origin,
+#     apt_package_cache_timestamp_seconds, node_reboot_required;
+#   - collector health: apt_collector_success, apt_collector_last_run_timestamp_seconds,
+#     apt_collector_last_success_timestamp_seconds, apt_collector_duration_seconds, apt_collector_info;
+#   - apt_security_upgrades_pending and apt_security_pending_since_timestamp_seconds
+#     (when security updates first showed up; reset when none are left);
+#   - a kernel check, because Proxmox never creates /run/reboot-required:
+#     apt_kernel_reboot_required, apt_kernel_info{running,expected}, apt_reboot_required
+#     (kernel or /run/reboot-required) and apt_reboot_required_since_timestamp_seconds.
+# On a failed run only the collector-health and kernel metrics (plus the stored security
+# "since", if any) are written, so no old apt numbers are shown as current.
+#
+# Read-only towards apt: it never runs apt update or upgrade. Package lists are
+# refreshed by pve-daily-update (Proxmox) or APT::Periodic (Ubuntu).
+# Atomic write (tmp + mv). Settings: /etc/default/apt-textfile (TEXTFILE_DIR).
+# Run by apt-textfile.timer. Install apt_info.py (the pinned commit above) at /usr/local/lib/apt-textfile/apt_info.py.
+set -u -o pipefail
+umask 022
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+TEXTFILE_DIR=/var/lib/node_exporter/textfile_collector
+[ -r /etc/default/apt-textfile ] && . /etc/default/apt-textfile
+
+SCRIPT=/usr/local/lib/apt-textfile/apt_info.py
+SCRIPT_SHA256=90f4a5950c2479914cf95bd7db87dbc644d72eea60e5f06d6c192b1560f80267
+UPSTREAM_COMMIT=9517d9d06769b133d1ac0142f888f6c7388b8c6b
+STATE_DIR=/var/lib/apt-textfile
+SEC_SINCE_FILE=$STATE_DIR/security-pending-since
+REBOOT_SINCE_FILE=$STATE_DIR/reboot-required-since
+OUT=$TEXTFILE_DIR/apt.prom
+BOOT_DIR=/boot
+REBOOT_FILE=/run/reboot-required
+PIN_FILE=/etc/kernel/proxmox-boot-pin
+
+log() { echo "apt-textfile: $*" >&2; }
+isnum() { case $1 in '' | *[!0-9]*) return 1 ;; esac; }
+# first_seen FILE CANDIDATE: print the time kept in FILE, or store CANDIDATE there first
+first_seen() {
+  local t
+  t=$(head -c 20 "$1" 2>/dev/null | tr -dc 0-9)
+  if ! isnum "$t"; then
+    t=$2
+    echo "$t" > "$1.tmp" && mv -f "$1.tmp" "$1"
+  fi
+  echo "$t"
+}
+
+start=$(date +%s)
+if [ ! -d "$TEXTFILE_DIR" ]; then
+  log "textfile directory $TEXTFILE_DIR is missing"
+  exit 1
+fi
+mkdir -p "$STATE_DIR" || exit 1
+body=$(mktemp) || exit 1
+tmp=$(mktemp "$TEXTFILE_DIR/.apt.prom.XXXXXX") || { rm -f "$body"; exit 1; }
+trap 'rm -f "$body" "$tmp"' EXIT
+
+# 1. the pinned upstream script
+ok=1
+got=$(sha256sum "$SCRIPT" 2>/dev/null | cut -d' ' -f1)
+if [ "$got" != "$SCRIPT_SHA256" ]; then
+  ok=0; log "sha256 of $SCRIPT is '${got:-missing}', expected $SCRIPT_SHA256"
+elif ! timeout 300 python3 "$SCRIPT" > "$body"; then
+  ok=0; log "apt_info.py failed"
+elif ! grep -q '^apt_upgrades_pending' "$body" || ! grep -q '^node_reboot_required' "$body"; then
+  ok=0; log "apt_info.py output is incomplete"
+fi
+now=$(date +%s)
+
+last_ok=$(awk '$1 == "apt_collector_last_success_timestamp_seconds" { print $2; exit }' "$OUT" 2>/dev/null)
+isnum "$last_ok" || last_ok=0
+security=""; sec_since=""
+if [ "$ok" = 1 ]; then
+  last_ok=$now
+  security=$(awk '/^apt_upgrades_pending\{/ && /origin="[^"]*-security/ { s += $NF } END { printf "%d", s }' "$body")
+  isnum "$security" || security=0
+  if [ "$security" -gt 0 ]; then
+    sec_since=$(first_seen "$SEC_SINCE_FILE" "$now")
+  else
+    rm -f "$SEC_SINCE_FILE"
+  fi
+else
+  # keep the last known "since" on a failed run, so one bad run doesn't resolve and
+  # re-fire the 14-day alert (the security count itself is not shown when the run failed)
+  sec_since=$(head -c 20 "$SEC_SINCE_FILE" 2>/dev/null | tr -dc 0-9)
+fi
+
+# 2. kernel check: running kernel vs the one the next boot will use
+running=$(uname -r)
+expected=$(ls -1 "$BOOT_DIR" 2>/dev/null | sed -n 's/^vmlinuz-//p' | sort -V | tail -n 1)
+pin=$(head -n 1 "$PIN_FILE" 2>/dev/null | tr -d '[:space:]')
+if [ -n "$pin" ] && [ -e "$BOOT_DIR/vmlinuz-$pin" ]; then expected=$pin; fi
+kernel_reboot=0
+if [ -n "$expected" ] && [ "$expected" != "$running" ]; then kernel_reboot=1; fi
+reboot=0; reboot_since=""
+if [ "$kernel_reboot" = 1 ] || [ -e "$REBOOT_FILE" ]; then
+  reboot=1
+  cand=$now
+  for t in $( [ "$kernel_reboot" = 1 ] && stat -c %Z "$BOOT_DIR/vmlinuz-$expected" 2>/dev/null ) \
+           $( [ -e "$REBOOT_FILE" ] && stat -c %Z "$REBOOT_FILE" 2>/dev/null ); do
+    if isnum "$t" && [ "$t" -lt "$cand" ]; then cand=$t; fi
+  done
+  reboot_since=$(first_seen "$REBOOT_SINCE_FILE" "$cand")
+else
+  rm -f "$REBOOT_SINCE_FILE"
+fi
+
+emit() {
+  if [ "$ok" = 1 ]; then cat "$body"; fi
+  cat <<EOF
+# HELP apt_collector_success 1 if the last apt-textfile run read apt cleanly.
+# TYPE apt_collector_success gauge
+apt_collector_success $ok
+# HELP apt_collector_last_run_timestamp_seconds When apt-textfile last ran.
+# TYPE apt_collector_last_run_timestamp_seconds gauge
+apt_collector_last_run_timestamp_seconds $now
+# HELP apt_collector_last_success_timestamp_seconds When apt-textfile last read apt cleanly (0 = never).
+# TYPE apt_collector_last_success_timestamp_seconds gauge
+apt_collector_last_success_timestamp_seconds $last_ok
+# HELP apt_collector_duration_seconds How long the last run took.
+# TYPE apt_collector_duration_seconds gauge
+apt_collector_duration_seconds $((now - start))
+# HELP apt_collector_info The pinned upstream apt_info.py.
+# TYPE apt_collector_info gauge
+apt_collector_info{upstream_commit="${UPSTREAM_COMMIT:0:12}",script_sha256="${SCRIPT_SHA256:0:12}"} 1
+# HELP apt_kernel_reboot_required 1 if the running kernel is not the one the next boot uses.
+# TYPE apt_kernel_reboot_required gauge
+apt_kernel_reboot_required $kernel_reboot
+# HELP apt_kernel_info Running kernel and the kernel the next boot uses.
+# TYPE apt_kernel_info gauge
+apt_kernel_info{running="$running",expected="${expected:-unknown}"} 1
+# HELP apt_reboot_required 1 if a reboot is needed (new kernel, or /run/reboot-required).
+# TYPE apt_reboot_required gauge
+apt_reboot_required $reboot
+EOF
+  if [ "$reboot" = 1 ]; then
+    cat <<EOF
+# HELP apt_reboot_required_since_timestamp_seconds Since when a reboot has been needed.
+# TYPE apt_reboot_required_since_timestamp_seconds gauge
+apt_reboot_required_since_timestamp_seconds $reboot_since
+EOF
+  fi
+  if [ "$ok" = 1 ]; then
+    cat <<EOF
+# HELP apt_security_upgrades_pending Pending upgrades from a *-security origin.
+# TYPE apt_security_upgrades_pending gauge
+apt_security_upgrades_pending $security
+EOF
+  fi
+  if isnum "$sec_since"; then
+    cat <<EOF
+# HELP apt_security_pending_since_timestamp_seconds Since when security upgrades have been pending without a break.
+# TYPE apt_security_pending_since_timestamp_seconds gauge
+apt_security_pending_since_timestamp_seconds $sec_since
+EOF
+  fi
+}
+
+if ! { emit > "$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "$OUT"; }; then
+  log "could not write $OUT"
+  exit 1
+fi
+[ "$ok" = 1 ]

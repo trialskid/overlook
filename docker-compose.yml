@@ -1,0 +1,32 @@
+# Overlook. Put your homelab.json in ./config (start from config/example.homelab.json) and your keys in .env
+# (mode 600, see .env.example). Keep it on your LAN or behind a login (CC_LOGIN_BCRYPT); see docs/DEPLOY.md.
+services:
+  overlook:
+    image: ghcr.io/trialskid/overlook:latest   # or: build: .
+    container_name: overlook
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - overlook-data:/data
+      # the folder, not the file: an editor that saves homelab.json as a new file is still seen (reloaded within 30 s)
+      - ./config:/config:ro
+      # optional: a devices.json your own job writes (module devices)
+      # - ./inbox:/app/inbox:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 100
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  overlook-data:

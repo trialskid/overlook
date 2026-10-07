@@ -1,0 +1,103 @@
+/* Graphite theme tokens: the single source for colours, type and motion (design/SPEC.md). */
+:root {
+  /* surfaces */
+  --bg: #0e1014;
+  --bg-glow: #161b26;
+  --bg-mobile-glow: radial-gradient(ellipse 90% 40% at 50% 0%, #161b26 0%, #0e1014 70%);
+  --page-glow: radial-gradient(ellipse 60% 50% at 38% 30%, #161b26 0%, #0e1014 70%);
+  /* review Phase 5 (1c): the page glows red while the incident band leads */
+  --page-glow-danger: radial-gradient(ellipse 60% 50% at 38% 30%, #1c1519 0%, #0e1014 70%);
+  --bg-mobile-glow-danger: radial-gradient(ellipse 90% 40% at 50% 0%, #1c1519 0%, #0e1014 70%);
+  --surface: #171a21;
+  --surface-sel: #1a2236;
+  --pill: #13161c;
+  --pill-bd: #262b35;
+  --inset: #111318;
+  --hover: #1d2230;
+  --palette: #14171d;
+
+  /* rules and lines */
+  --rule: #2c313c;
+  --rule-2: #232731;
+  --rule-3: #1c1f27;
+  --line: #2d3a55;
+  --line-2: #232a38;
+  --grid-dot: #1d212a;
+  --dash: #3b414d;
+
+  /* text */
+  --text: #eceef2;
+  --text-2: #cdd2db;
+  --mut-1: #a7adb9;
+  --mut-2: #9097a3;
+  /* --mut-3 is the floor for text (5.2:1 on the page); 4 and 5 are for rules, hollow dots and disabled glyphs only */
+  --mut-3: #7f8693;
+  --mut-4: #6b7280;
+  --mut-5: #555c68;
+
+  /* accents and states */
+  --accent: #6ea8ff;
+  --accent-hi: #9cc3ff;
+  --accent-2: #c792ff;
+  --accent-a14: rgba(110, 168, 255, .14);
+  --accent-a16: rgba(110, 168, 255, .16);
+  /* Devices filter match highlight (finding 21) */
+  --accent-a22: rgba(110, 168, 255, .22);
+  --on-accent: #0b1020;
+  --ok: #3ddc97;
+  --ok-bg: #13291f;
+  --ok-fg: #6fe3b0;
+  --ok-pulse: rgba(61, 220, 151, .6);
+  /* header status dot halos (review finding 1) */
+  --ok-a16: rgba(61, 220, 151, .16);
+  --warn-a18: rgba(242, 184, 75, .18);
+  --danger-a18: rgba(255, 92, 108, .18);
+  /* a down web UI's row tint (finding 2) */
+  --danger-a07: rgba(255, 92, 108, .07);
+  --uptime-up: #2b8a63;
+  --warn: #f2b84b;
+  --warn-bg: #3a2d10;
+  --warn-sub: #a8966a;
+  --warn-rule: #4a3e22;
+  --warm-1: #272214;
+  --warm-2: #17171a;
+  --poster-1: #2a2618;
+  --poster-2: #191812;
+  --danger: #ff5c6c;
+  --danger-rule: #5a2730;
+  --danger-sub: #e89aa3;
+  /* info: known or chronic items (never changes the status line) */
+  --info: #8d9bb5;
+  --info-sub: #8b93a1;
+  --info-rule: #2a303d;
+  --heat: #ff9f5a;
+  --pub: #ff8a4c;
+  --pub-fg: #ffc1a0;
+  --pub-bd: #5c3520;
+  --pub-bg: #22150e;
+
+  /* printer toner */
+  --toner-c: #4fc3f7;
+  --toner-m: #f06292;
+  --toner-y: #ffd54f;
+  --fw-glow: 0 0 30px rgba(110, 168, 255, .12);
+
+  /* type */
+  --font-ui: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  /* motion */
+  --sel-fade: .2s;
+  --select-glow: 0 0 0 4px rgba(110, 168, 255, .12), 0 0 40px rgba(110, 168, 255, .2);
+  /* a Links editor row lifted by its drag handle (finding 22) */
+  --lift-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  /* review Phase 4: a download packet's glow (3a), the climate glow behind heating / cooling (3b), a new poster's
+     warm ring (3f) */
+  --packet-glow: 0 0 8px rgba(110, 168, 255, .85);
+  --heat-glow: rgba(255, 159, 90, .30);
+  --cool-glow: rgba(110, 168, 255, .26);
+  --warn-a75: rgba(242, 184, 75, .75);
+  --warn-a0: rgba(242, 184, 75, 0);
+
+  color-scheme: dark;
+}

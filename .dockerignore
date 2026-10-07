@@ -1,0 +1,12 @@
+.env*
+node_modules
+dist
+data
+test-results
+docs
+tests
+local
+config/homelab.json
+CLAUDE.local.md
+.git
+.github

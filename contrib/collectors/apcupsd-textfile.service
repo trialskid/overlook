@@ -1,0 +1,33 @@
+[Unit]
+Description=Write UPS (apcupsd) metrics for node_exporter (Overlook module ups)
+Documentation=file:///usr/local/sbin/apcupsd-textfile-collector
+After=apcupsd.service
+ConditionFileIsExecutable=/usr/local/sbin/apcupsd-textfile-collector
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/sbin/apcupsd-textfile-collector
+TimeoutStartSec=30s
+Nice=10
+StandardOutput=journal
+StandardError=journal
+# It only runs apcaccess against 127.0.0.1:3551 and writes one file.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/node_exporter/textfile_collector
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=CAP_CHOWN
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=64M

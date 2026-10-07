@@ -1,0 +1,15 @@
+[Unit]
+Description=apt metrics for node_exporter (apt.prom, Overlook module apt)
+Documentation=file:/usr/local/sbin/apt-textfile
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/apt-textfile
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=400M
+TimeoutStartSec=10min
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+NoNewPrivileges=yes

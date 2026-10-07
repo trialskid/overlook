@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+"""apcupsd -> node_exporter textfile collector (Overlook module ups).
+
+Runs on the host whose apcupsd watches the UPS (directly over USB, or as a network
+client of another host's apcupsd). This reads that host's OWN apcupsd NIS
+(127.0.0.1:3551) with `apcaccess status` and writes
+/var/lib/node_exporter/textfile_collector/apcupsd.prom atomically
+(temp file + rename, 0640 root:node_exporter).
+
+It only reads: it never talks to the UPS or the master directly and never
+changes apcupsd. Run every minute by apcupsd-textfile.timer.
+
+Stale data is never published as live: when this apcupsd has lost the
+master (COMMLOST) or has not heard from it for FRESH_MAX_AGE seconds, the
+measured values (charge, runtime, load, voltages, time on battery) are left
+out and apcupsd_data_fresh is 0.
+
+Test options: --stdout (print, write nothing), --input FILE (parse FILE
+instead of running apcaccess), --now EPOCH (pretend the time is EPOCH).
+Exit code: 0 ok, 1 when apcaccess failed (the metrics still say so).
+"""
+import argparse
+import datetime
+import grp
+import math
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+
+OUT = "/var/lib/node_exporter/textfile_collector/apcupsd.prom"
+APCACCESS = "/usr/sbin/apcaccess"
+NIS = "127.0.0.1:3551"
+UPS = "server"          # label value; a second UPS would get its own (e.g. "network")
+FRESH_MAX_AGE = 120     # s since this apcupsd last heard from the master (it polls every 10 s)
+TIMEOUT = 10            # s for apcaccess
+
+# STATFLAG bits (apcupsd include/defines.h)
+FLAGS = (
+    ("online", 0x00000008),
+    ("on_battery", 0x00000010),
+    ("low_battery", 0x00000040),
+    ("replace_battery", 0x00000080),
+    ("overload", 0x00000020),
+    ("comm_lost", 0x00000100),
+    ("shutting_down", 0x00000200),
+    ("calibration", 0x00000001),
+    ("trim", 0x00000002),
+    ("boost", 0x00000004),
+    ("slave", 0x00000400),
+    ("battery_present", 0x04000000),
+)
+
+# Measured values: left out when the data is not fresh.
+MEASURED = (
+    ("BCHARGE", "apcupsd_battery_charge_percent", "Battery charge in percent."),
+    ("TIMELEFT", "apcupsd_battery_time_left_seconds", "UPS runtime estimate at the current load, in seconds."),
+    ("LOADPCT", "apcupsd_ups_load_percent", "Load in percent of the UPS nominal power."),
+    ("LINEV", "apcupsd_line_volts", "Input (mains) voltage."),
+    ("OUTPUTV", "apcupsd_output_volts", "Output voltage."),
+    ("TONBATT", "apcupsd_battery_time_on_seconds", "Seconds on battery in the current outage (0 on mains)."),
+)
+# Settings and ratings: always written.
+SETTINGS = (
+    ("NOMPOWER", "apcupsd_nominal_power_watts", "UPS nominal output power in watts."),
+    ("NOMINV", "apcupsd_line_nominal_volts", "Nominal input voltage."),
+    ("LOTRANS", "apcupsd_transfer_low_volts", "Input voltage below which the UPS goes to battery."),
+    ("HITRANS", "apcupsd_transfer_high_volts", "Input voltage above which the UPS goes to battery."),
+    ("MBATTCHG", "apcupsd_shutdown_battery_charge_percent", "This host shuts down at or below this battery charge (apcupsd BATTERYLEVEL)."),
+    ("MINTIMEL", "apcupsd_shutdown_time_left_seconds", "This host shuts down at or below this runtime left (apcupsd MINUTES)."),
+    ("MAXTIME", "apcupsd_shutdown_time_on_battery_seconds", "This host shuts down after this long on battery (apcupsd TIMEOUT; 0 = off)."),
+)
+COUNTERS = (
+    ("NUMXFERS", "apcupsd_battery_transfers_total", "Transfers to battery seen by this host's apcupsd since it started (resets on restart)."),
+    ("CUMONBATT", "apcupsd_battery_cumulative_time_on_seconds_total", "Seconds on battery since this host's apcupsd started (resets on restart)."),
+)
+# Timestamps: 0 when apcupsd says N/A (no transfer since it started).
+TIMESTAMPS = (
+    ("XONBATT", "apcupsd_last_transfer_on_battery_timestamp_seconds", "Unix time of the last transfer to battery (0 = none since apcupsd started)."),
+    ("XOFFBATT", "apcupsd_last_transfer_off_battery_timestamp_seconds", "Unix time of the last transfer back to mains (0 = none since apcupsd started)."),
+    ("MASTERUPD", "apcupsd_master_last_update_timestamp_seconds", "Unix time this host's apcupsd last got data from the master (slaves only)."),
+    ("DATE", "apcupsd_status_timestamp_seconds", "Unix time of apcupsd's last status poll."),
+    ("STARTTIME", "apcupsd_daemon_start_timestamp_seconds", "Unix time this host's apcupsd started."),
+)
+UNIT_FACTOR = {"minutes": 60.0, "minute": 60.0, "hours": 3600.0, "hour": 3600.0}
+
+NUM_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*([A-Za-z]*)")
+PREV_RE = re.compile(r"^apcupsd_collector_last_success_timestamp_seconds\s+(\d+(?:\.\d+)?)\s*$", re.M)
+
+
+def esc(value):
+    return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def fmt(value):
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+        return ("%.3f" % value).rstrip("0").rstrip(".")
+    return str(value)
+
+
+def parse(text):
+    fields = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition(":")
+        if not sep:
+            continue
+        fields[key.strip()] = value.strip()
+    return fields
+
+
+def number(raw):
+    """'53.3 Minutes' -> 3198.0, '121.0 Volts' -> 121.0, 'N/A' -> None."""
+    if raw is None:
+        return None
+    m = NUM_RE.match(raw)
+    if not m:
+        return None
+    return float(m.group(1)) * UNIT_FACTOR.get(m.group(2).lower(), 1.0)
+
+
+def stamp(raw):
+    """'2026-10-05 13:37:16 -0600' -> epoch seconds; 'N/A' or junk -> None."""
+    if not raw or raw.upper().startswith("N/A"):
+        return None
+    for pattern in ("%Y-%m-%d %H:%M:%S %z", "%a %b %d %H:%M:%S %Z %Y"):
+        try:
+            return int(datetime.datetime.strptime(raw.strip(), pattern).timestamp())
+        except ValueError:
+            continue
+    return None
+
+
+def previous_success(path):
+    try:
+        with open(path, encoding="utf-8") as handle:
+            m = PREV_RE.search(handle.read())
+            return int(float(m.group(1))) if m else 0
+    except OSError:
+        return 0
+
+
+def read_apcaccess(input_file):
+    if input_file:
+        with open(input_file, encoding="utf-8", errors="replace") as handle:
+            return handle.read(), None
+    try:
+        proc = subprocess.run(
+            [APCACCESS, "-h", NIS, "status"],
+            capture_output=True, text=True, timeout=TIMEOUT, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return "", "apcaccess failed: %s" % error
+    if proc.returncode != 0:
+        return "", "apcaccess exit %d: %s" % (proc.returncode, proc.stderr.strip()[:200])
+    return proc.stdout, None
+
+
+class Out:
+    def __init__(self):
+        self.lines = []
+        self.seen = set()
+
+    def metric(self, name, help_text, value, labels=None, kind="gauge"):
+        text = fmt(value)
+        if text is None:
+            return
+        if name not in self.seen:
+            self.lines.append("# HELP %s %s" % (name, help_text))
+            self.lines.append("# TYPE %s %s" % (name, kind))
+            self.seen.add(name)
+        label_text = ""
+        if labels:
+            label_text = "{" + ",".join('%s="%s"' % (k, esc(v)) for k, v in labels.items()) + "}"
+        self.lines.append("%s%s %s" % (name, label_text, text))
+
+    def text(self):
+        return "\n".join(self.lines) + "\n"
+
+
+def build(text, error, now, last_success_before):
+    out = Out()
+    ups = {"ups": UPS}
+    fields = parse(text) if not error else {}
+    if not error and ("STATUS" not in fields or "STATFLAG" not in fields):
+        error = "apcaccess output has no STATUS/STATFLAG"
+        fields = {}
+    ok = error is None
+
+    if ok:
+        statflag = int(fields["STATFLAG"].split()[0], 16)
+        status_words = fields["STATUS"].split()
+        comm_lost = bool(statflag & 0x100) or "COMMLOST" in status_words
+        reference = stamp(fields.get("MASTERUPD")) or stamp(fields.get("DATE"))
+        age = (now - reference) if reference else None
+        fresh = (not comm_lost) and age is not None and -60 <= age <= FRESH_MAX_AGE
+
+        out.metric("apcupsd_up", "1 if this host's apcupsd answered apcaccess.", 1, ups)
+        out.metric("apcupsd_data_fresh", "1 if the UPS data is current (no COMMLOST, master data at most %d s old)." % FRESH_MAX_AGE, 1 if fresh else 0, ups)
+        if age is not None:
+            out.metric("apcupsd_data_age_seconds", "Seconds since this host's apcupsd last got data from the master.", max(0, int(age)), ups)
+        out.metric("apcupsd_ups_info", "UPS identity (value is always 1).", 1, {
+            "ups": UPS,
+            "ups_name": fields.get("UPSNAME", ""),
+            "model": fields.get("MODEL", ""),
+            "driver": fields.get("DRIVER", ""),
+            "master": fields.get("MASTER", ""),
+            "apcupsd_version": fields.get("VERSION", "").split()[0] if fields.get("VERSION") else "",
+        })
+        out.metric("apcupsd_status_info", "apcupsd STATUS text (value is always 1).", 1, {"ups": UPS, "status": " ".join(status_words)})
+        out.metric("apcupsd_status_flags", "Raw apcupsd STATFLAG bit field.", statflag, ups)
+        for flag, bit in FLAGS:
+            out.metric("apcupsd_status_flag", "1 if the apcupsd STATFLAG bit is set.", 1 if statflag & bit else 0, {"ups": UPS, "flag": flag})
+        if fresh:
+            for key, name, help_text in MEASURED:
+                value = number(fields.get(key))
+                if value is not None:
+                    out.metric(name, help_text, value, ups)
+        for key, name, help_text in SETTINGS:
+            value = number(fields.get(key))
+            if value is not None:
+                out.metric(name, help_text, value, ups)
+        for key, name, help_text in COUNTERS:
+            value = number(fields.get(key))
+            if value is not None:
+                out.metric(name, help_text, value, ups, kind="counter")
+        for key, name, help_text in TIMESTAMPS:
+            if key in ("MASTERUPD",) and key not in fields:
+                continue  # not a slave
+            value = stamp(fields.get(key))
+            out.metric(name, help_text, value if value is not None else 0, ups)
+        reason = fields.get("LASTXFER")
+        if reason and not reason.upper().startswith("N/A"):
+            out.metric("apcupsd_last_transfer_info", "Reason apcupsd gave for the last transfer (value is always 1).", 1, {"ups": UPS, "reason": reason})
+    else:
+        out.metric("apcupsd_up", "1 if this host's apcupsd answered apcaccess.", 0, ups)
+        out.metric("apcupsd_data_fresh", "1 if the UPS data is current (no COMMLOST, master data at most %d s old)." % FRESH_MAX_AGE, 0, ups)
+
+    last_success = int(now) if ok else last_success_before
+    out.metric("apcupsd_collector_success", "1 if the last collector run read apcupsd.", 1 if ok else 0)
+    out.metric("apcupsd_collector_last_run_timestamp_seconds", "Unix time of the last collector run.", int(now))
+    out.metric("apcupsd_collector_last_success_timestamp_seconds", "Unix time of the last successful collector run (0 = none yet).", last_success)
+    return out.text(), error
+
+
+def atomic_write(path, data):
+    directory = os.path.dirname(path)
+    if not os.path.isdir(directory) or os.path.islink(directory):
+        raise RuntimeError("unsafe or missing output directory: %s" % directory)
+    try:
+        gid = grp.getgrnam("node_exporter").gr_gid
+    except KeyError:
+        gid = 0
+    descriptor, temporary = tempfile.mkstemp(prefix=".apcupsd.prom.", dir=directory)
+    try:
+        os.fchmod(descriptor, 0o640)
+        os.fchown(descriptor, 0, gid)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            descriptor = -1
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--stdout", action="store_true", help="print the metrics, write nothing")
+    parser.add_argument("--input", help="parse this file instead of running apcaccess")
+    parser.add_argument("--now", type=float, help="pretend the current time is this epoch")
+    parser.add_argument("--output", default=OUT)
+    args = parser.parse_args()
+
+    now = args.now if args.now is not None else time.time()
+    text, error = read_apcaccess(args.input)
+    body, error = build(text, error, now, previous_success(args.output))
+    if args.stdout:
+        sys.stdout.write(body)
+    else:
+        atomic_write(args.output, body)
+    if error:
+        print("apcupsd-textfile: %s" % error, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

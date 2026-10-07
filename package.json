@@ -1,0 +1,46 @@
+{
+  "name": "overlook",
+  "version": "0.1.0",
+  "description": "A status-first homelab dashboard: what broke, where on the network, and what to do next (Proxmox, Prometheus, Uptime Kuma, Grafana, Home Assistant, the *arr stack)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trialskid/overlook.git"
+  },
+  "homepage": "https://github.com/trialskid/overlook",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:mock": "MOCK=1 node scripts/dev.mjs",
+    "build": "vite build && esbuild server/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/server/index.js",
+    "start": "NODE_ENV=production node dist/server/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --import ./tests/setup.ts --test tests/server/*.test.ts",
+    "shots": "node tests/shots.mjs",
+    "test:local": "node --import tsx --test local/tests/*.test.ts",
+    "demo": "MOCK=1 HOMELAB_CONFIG=config/example.homelab.json node scripts/dev.mjs"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0",
+    "@hono/node-server": "^2.1.3",
+    "bcryptjs": "^3.0.3",
+    "hono": "^4.13.12",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "esbuild": "^0.28.2",
+    "playwright": "^1.59.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2"
+  }
+}

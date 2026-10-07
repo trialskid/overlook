@@ -1,0 +1,493 @@
+{
+  "domain": "lab.example.com",
+  "modules": [
+    "proxmox",
+    "prometheus",
+    "network",
+    "kuma",
+    "grafana",
+    "ntfy",
+    "probes",
+    "weather",
+    "plex",
+    "sonarr",
+    "radarr",
+    "bazarr",
+    "prowlarr",
+    "seerr",
+    "qbittorrent",
+    "nzbget",
+    "immich",
+    "wud",
+    "homeassistant",
+    "unraid",
+    "checks"
+  ],
+  "timezone": "Europe/London",
+  "ui": {
+    "title": "Overlook",
+    "launcher": {
+      "hidden": [
+        "overlook"
+      ]
+    }
+  },
+  "location": {
+    "name": "Greenwich",
+    "lat": 51.4779,
+    "lon": -0.0015
+  },
+  "network": {
+    "subnet": "10.20.0.0/24",
+    "gateway": {
+      "id": "router",
+      "name": "OPNsense",
+      "ip": "10.20.0.1",
+      "os": "OPNsense",
+      "snmpJob": "snmp-router",
+      "wanIf": "igc0"
+    },
+    "switch": {
+      "id": "switch",
+      "name": "Core switch",
+      "model": "24-port managed switch",
+      "ip": "10.20.0.2",
+      "firmware": "2.1.0",
+      "snmpJob": "snmp-switch"
+    },
+    "accessPoints": [
+      {
+        "name": "AP Living room",
+        "ip": "10.20.0.20",
+        "port": "p5",
+        "model": "Wi-Fi 6 AP"
+      },
+      {
+        "name": "AP Office",
+        "ip": "10.20.0.21",
+        "port": "p6",
+        "model": "Wi-Fi 6 AP"
+      }
+    ],
+    "segments": [
+      {
+        "id": "guest",
+        "name": "Guest Wi-Fi",
+        "prefix": "10.30.0",
+        "gatewayIf": "igc2"
+      }
+    ],
+    "tunnel": "Cloudflare tunnel"
+  },
+  "publicEndpoints": [
+    {
+      "name": "Seerr",
+      "host": "requests.example.com",
+      "via": "tunnel",
+      "expect": [
+        200,
+        301,
+        302,
+        307
+      ],
+      "origin": "Seerr · media :5055"
+    },
+    {
+      "name": "Immich",
+      "host": "photos.example.com",
+      "via": "tunnel",
+      "expect": [
+        200,
+        301,
+        302
+      ],
+      "origin": "Immich · photos :2283"
+    },
+    {
+      "name": "Plex remote access",
+      "host": "WAN TCP 32400",
+      "via": "port-forward",
+      "expect": [],
+      "origin": "Plex · media :32400",
+      "probe": false,
+      "check": "plex"
+    },
+    {
+      "name": "WireGuard",
+      "host": "WAN UDP 51820",
+      "via": "port-forward",
+      "expect": [],
+      "origin": "WireGuard · router",
+      "probe": false
+    }
+  ],
+  "retiredHosts": [],
+  "hosts": [
+    {
+      "id": "pve1",
+      "name": "pve1",
+      "type": "proxmox",
+      "ip": "10.20.0.10",
+      "port": "p1",
+      "hardware": "Ryzen 7 5800U · 64 GB RAM · 1 TB NVMe",
+      "api": "https://10.20.0.10:8006",
+      "pveNode": "pve1",
+      "nodeJob": "node-pve1"
+    },
+    {
+      "id": "nas",
+      "name": "NAS",
+      "type": "unraid",
+      "ip": "10.20.0.30",
+      "port": "p3",
+      "hardware": "i5-12400 · 32 GB RAM · parity + 4 data disks · 1 TB cache",
+      "nodeJob": "node-nas"
+    },
+    {
+      "id": "pve2",
+      "name": "pve2",
+      "type": "proxmox",
+      "ip": "10.20.0.11",
+      "port": "p2",
+      "hardware": "Intel N100 · 16 GB RAM · 512 GB SSD",
+      "api": "https://10.20.0.11:8006",
+      "pveNode": "pve2",
+      "nodeJob": "node-pve2"
+    }
+  ],
+  "guests": [
+    {
+      "host": "pve1",
+      "vmid": 100,
+      "name": "homeassistant",
+      "kind": "vm",
+      "ip": "10.20.0.40",
+      "desc": "Home Assistant OS",
+      "services": [
+        "Home Assistant",
+        "Z-Wave JS",
+        "Matter Server"
+      ],
+      "devices": [
+        "Z-Wave lock",
+        "Door sensors ×2",
+        "Thermostat",
+        "Garage opener"
+      ]
+    },
+    {
+      "host": "pve1",
+      "vmid": 101,
+      "name": "media",
+      "kind": "lxc",
+      "ip": "10.20.0.41",
+      "services": [
+        "Plex",
+        "Sonarr",
+        "Radarr",
+        "Bazarr",
+        "Prowlarr",
+        "Seerr",
+        "Tautulli",
+        "qBittorrent",
+        "NZBGet",
+        "cAdvisor",
+        "exporters"
+      ],
+      "cadvisor": "cadvisor-101-media"
+    },
+    {
+      "host": "pve1",
+      "vmid": 102,
+      "name": "web",
+      "kind": "lxc",
+      "ip": "10.20.0.42",
+      "services": [
+        "Caddy",
+        "cloudflared",
+        "Gitea",
+        "Paperless-ngx",
+        "cAdvisor"
+      ],
+      "cadvisor": "cadvisor-102-web"
+    },
+    {
+      "host": "pve1",
+      "vmid": 103,
+      "name": "monitoring",
+      "kind": "lxc",
+      "ip": "10.20.0.43",
+      "services": [
+        "Prometheus",
+        "Grafana",
+        "Uptime Kuma",
+        "ntfy",
+        "WUD",
+        "Overlook"
+      ]
+    },
+    {
+      "host": "pve2",
+      "vmid": 200,
+      "name": "dns",
+      "kind": "lxc",
+      "ip": "10.20.0.50",
+      "services": [
+        "AdGuard Home"
+      ]
+    },
+    {
+      "host": "pve2",
+      "vmid": 201,
+      "name": "photos",
+      "kind": "lxc",
+      "ip": "10.20.0.51",
+      "services": [
+        "Immich"
+      ]
+    }
+  ],
+  "apps": [
+    {
+      "name": "Nextcloud",
+      "label": "Nextcloud",
+      "host": "nas",
+      "url": "http://10.20.0.30:8443",
+      "kuma": [
+        50
+      ]
+    },
+    {
+      "name": "Syncthing",
+      "label": "Syncthing",
+      "host": "nas",
+      "url": "http://10.20.0.30:8384",
+      "kuma": [
+        51
+      ]
+    },
+    {
+      "name": "Kopia",
+      "label": "Kopia",
+      "host": "nas",
+      "url": "http://10.20.0.30:51515",
+      "note": "off-site backups",
+      "kuma": [
+        52
+      ]
+    }
+  ],
+  "macRoles": [],
+  "webUis": {
+    "pve1": ".10:8006",
+    "pve2": ".11:8006",
+    "nas": ".30:80",
+    "homeassistant": ".40:8123",
+    "plex": ".41:32400",
+    "sonarr": ".41:8989",
+    "radarr": ".41:7878",
+    "bazarr": ".41:6767",
+    "prowlarr": ".41:9696",
+    "seerr": ".41:5055",
+    "tautulli": ".41:8181",
+    "qbittorrent": ".41:8080",
+    "nzbget": ".41:6789",
+    "git": ".42:3000",
+    "paperless": ".42:8000",
+    "grafana": ".43:3000",
+    "prometheus": ".43:9090",
+    "uptime": ".43:3001",
+    "ntfy": ".43:8090",
+    "wud": ".43:3003",
+    "overlook": ".43:4466",
+    "adguard": ".50:3000",
+    "immich": ".51:2283"
+  },
+  "uiUrls": {
+    "pve1": "https://10.20.0.10:8006",
+    "pve2": "https://10.20.0.11:8006"
+  },
+  "uiPaths": {
+    "plex": "/web/index.html"
+  },
+  "uiLabels": {
+    "git": "Gitea",
+    "uptime": "Uptime Kuma",
+    "homeassistant": "Home Assistant",
+    "qbittorrent": "qBittorrent",
+    "nzbget": "NZBGet",
+    "seerr": "Seerr",
+    "ntfy": "ntfy",
+    "adguard": "AdGuard Home",
+    "nas": "NAS",
+    "overlook": "Overlook"
+  },
+  "kumaAliases": {},
+  "links": {
+    "Documentation": [
+      [
+        "Proxmox Wiki",
+        "pve.proxmox.com"
+      ],
+      [
+        "Docker Docs",
+        "docs.docker.com"
+      ],
+      [
+        "Home Assistant Docs",
+        "www.home-assistant.io"
+      ]
+    ],
+    "Tools": [
+      [
+        "Router",
+        "http://10.20.0.1"
+      ],
+      [
+        "Speed test",
+        "www.speedtest.net"
+      ],
+      [
+        "ExplainShell",
+        "explainshell.com"
+      ]
+    ]
+  },
+  "attentionRules": {
+    "bazarrMissingSubtitlesAbove": 1000,
+    "wudUpdatesAbove": 0,
+    "diskWarnPct": 85,
+    "diskDangerPct": 95,
+    "certWarnDays": 14,
+    "lockBatteryWarnPct": 25
+  },
+  "jobs": [
+    {
+      "id": "vzdump-pve1",
+      "name": "Guest backups · pve1",
+      "group": "backup",
+      "family": "Proxmox guests → NAS",
+      "short": "pve1",
+      "where": "pve1 → NAS",
+      "schedule": "nightly 02:00",
+      "maxAgeH": 30,
+      "signal": "proxmox-vzdump",
+      "node": "pve1"
+    },
+    {
+      "id": "vzdump-pve2",
+      "name": "Guest backups · pve2",
+      "group": "backup",
+      "family": "Proxmox guests → NAS",
+      "short": "pve2",
+      "where": "pve2 → NAS",
+      "schedule": "nightly 03:00",
+      "maxAgeH": 30,
+      "signal": "proxmox-vzdump",
+      "node": "pve2"
+    },
+    {
+      "id": "kopia",
+      "name": "Kopia off-site",
+      "group": "backup",
+      "where": "NAS → off-site storage",
+      "schedule": "daily 05:00",
+      "maxAgeH": 30,
+      "signal": "prometheus",
+      "last": "kopia_snapshot_last_success_timestamp_seconds"
+    },
+    {
+      "id": "health-report",
+      "name": "Health report",
+      "group": "automation",
+      "where": "monitoring → ntfy",
+      "schedule": "daily 08:00",
+      "maxAgeH": 26,
+      "signal": "ntfy",
+      "topic": "lab-status"
+    },
+    {
+      "id": "host-config",
+      "name": "Host config backup",
+      "group": "backup",
+      "where": "pve1 → NAS",
+      "schedule": "weekly, Sun 03:00",
+      "maxAgeH": 0,
+      "signal": "none",
+      "note": "log only; needs a textfile metric"
+    }
+  ],
+  "devices": [
+    {
+      "name": "Printer",
+      "ip": ".60",
+      "note": "IPP",
+      "hue": 230
+    },
+    {
+      "name": "Living room TV",
+      "ip": ".61",
+      "note": "Plex client",
+      "hue": 300
+    }
+  ],
+  "mediaAlsoRunning": [],
+  "homeAssistant": {
+    "climate": "climate.living_room",
+    "climateLabel": "Thermostat · living room",
+    "humidity": "sensor.living_room_humidity",
+    "garage": "cover.garage_door",
+    "garageObstruction": null,
+    "garageLight": null,
+    "lights": [
+      {
+        "entity": "light.porch",
+        "name": "Porch",
+        "room": "Outside"
+      },
+      {
+        "entity": "light.kitchen",
+        "name": "Kitchen",
+        "room": "Kitchen"
+      }
+    ],
+    "appliances": [
+      {
+        "kind": "dishwasher",
+        "name": "Dishwasher",
+        "power": "switch.dishwasher_power",
+        "progress": "sensor.dishwasher_program_progress"
+      }
+    ],
+    "smoke": [],
+    "printer": null,
+    "backup": "sensor.backup_last_successful_automatic_backup",
+    "locks": [
+      {
+        "name": "Front door",
+        "entity": "lock.front_door",
+        "battery": "sensor.front_door_lock_battery",
+        "door": "binary_sensor.front_door_contact"
+      }
+    ]
+  },
+  "versions": [
+    [
+      "OPNsense",
+      "25.7",
+      "",
+      "2026-10-01"
+    ]
+  ],
+  "checks": [
+    {
+      "id": "disk-temp",
+      "name": "Hottest disk",
+      "query": "max(smartctl_device_temperature{temperature_type=\"current\"})",
+      "warn": 50,
+      "danger": 60,
+      "unit": "°C",
+      "where": "NAS · smartctl_exporter"
+    }
+  ]
+}

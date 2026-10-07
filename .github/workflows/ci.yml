@@ -1,0 +1,45 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t overlook:ci .
+  leaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # the maintainers' private denylist (names, addresses and domains that must never land here), kept as a secret
+      - name: denylist scan
+        env:
+          LEAK_DENYLIST: ${{ secrets.LEAK_DENYLIST }}
+          LEAK_DENYLIST_WORDS: ${{ secrets.LEAK_DENYLIST_WORDS }}
+        run: |
+          if [ -z "$LEAK_DENYLIST" ]; then echo "no LEAK_DENYLIST secret: skipped"; exit 0; fi
+          mkdir -p "$RUNNER_TEMP/leak"
+          printf '%s\n' "$LEAK_DENYLIST" > "$RUNNER_TEMP/leak/denylist.txt"
+          printf '%s\n' "$LEAK_DENYLIST_WORDS" > "$RUNNER_TEMP/leak/denylist-words.txt"
+          scripts/leak-scan.sh "$RUNNER_TEMP/leak/denylist.txt" >/dev/null 2>&1 || { echo "denylisted strings found (details withheld: the list is private)"; exit 1; }

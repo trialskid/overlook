@@ -1,0 +1,7 @@
+#!/bin/sh
+# Runs the leak scan. Report-only until local/scan-enforce exists (the copied code still
+# carries the owner's data until the scrub phases); from then on a hit blocks the commit.
+[ -s local/denylist.txt ] || exit 0
+if [ -e local/scan-enforce ]; then exec scripts/leak-scan.sh; fi
+scripts/leak-scan.sh >/dev/null 2>&1 || echo "leak-scan (report only): $(scripts/leak-scan.sh 2>/dev/null | grep -c :) file(s) still have owner data" >&2
+exit 0

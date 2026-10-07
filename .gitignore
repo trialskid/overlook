@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+test-results/
+*.log
+data/
+local/
+config/homelab.json
+CLAUDE.local.md
