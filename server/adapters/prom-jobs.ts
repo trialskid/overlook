@@ -8,6 +8,7 @@
 // older than 30 min: 'up' when the age was under maxAgeH, 'degraded' over it, 'unknown' with no value.
 // A job whose own expression fails at run time (a 422 from Prometheus) carries `error`: its rows read 'unknown'
 // with the reason, never green because the last-success half still answers.
+// values: a job's `values` (one number each, the first series; not for `by` jobs) for its detail line, rendered by derive.
 // Writes Raw.jobs, a MERGE key: proxmox adds vzdump-*, ntfy adds its own jobs.
 import { config } from '../config.ts';
 import { ranges, rowsAndErrors, toMs, type Row } from './prometheus.ts';
@@ -49,9 +50,11 @@ export const promJobs: Adapter = {
   async run() {
     const jobs = config.jobs.filter(j => j.signal === 'prometheus' && (j.last || j.ok));
     const qs: Record<string, string> = {};
+    const vals = (j: JobConfig) => (j.by ? [] : Object.entries(j.values ?? {}).filter(([k, q]) => k && typeof q === 'string' && q));
     for (const j of jobs) {
       if (j.last) qs[`last:${j.id}`] = worst(j, j.last);
       if (j.ok) qs[`ok:${j.id}`] = worst(j, j.ok);
+      for (const [k, q] of vals(j)) qs[`val:${j.id}:${k}`] = q;
     }
     const { out: r, failed } = await rowsAndErrors(qs);
 
@@ -72,8 +75,9 @@ export const promJobs: Adapter = {
       if (!keys.size) keys.set(j.id, undefined); // nothing at all: one explicit no-data row
       for (const [key, value] of keys) {
         const l = last.find(x => rowKey(j, x.m) === key), o = ok.find(x => j.by && value !== undefined && x.m[j.by] === value) ?? allOk;
+        const values = key === j.id && vals(j).length ? { values: Object.fromEntries(vals(j).map(([k]) => [k, r[`val:${j.id}:${k}`]?.[0]?.v ?? null])) } : {};
         out[key] = {
-          lastAt: l ? toMs(l.v) : null, ok: o ? o.v >= 1 : null,
+          ...values, lastAt: l ? toMs(l.v) : null, ok: o ? o.v >= 1 : null,
           days: days(key), ...(value !== undefined ? { label: value } : {}), ...(err ? { error: err } : {}),
         };
       }

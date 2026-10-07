@@ -462,7 +462,7 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
   // -- UPS, Unraid disk health, apt, tunnels (before the disk-fill items: Grafana's disk-health
   // alerts fold into their own items first)
   items.push(...ops.items);
-  const checks = deriveChecks(cfg, raw, fresh('prom-checks'));
+  const checks = deriveChecks(cfg, raw, { prom: fresh('prom-checks'), kuma: fresh('kuma') }, now);
   items.push(...checks.items);
 
   // -- storage, certificates, NFS, pipelines, network gear
@@ -634,6 +634,11 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
   for (const d of disks) storage.push({ ...vol(`Unraid ${d.disk}`, d.usedTB, d.totalTB, tb(d.usedTB), tb(d.totalTB), `${tb(Math.max(0, d.totalTB - d.usedTB))} free`), tone: 'ok', under: ARRAY });
   if (un && fin(un.cacheGB) && un.cacheGB > 0) storage.push({ ...vol('Unraid cache', un.cacheUsedGB, un.cacheGB, gb(un.cacheUsedGB), gb(un.cacheGB), `${gb(Math.max(0, un.cacheGB - un.cacheUsedGB))} free`), tone: fillTone(un.cacheUsedGB, un.cacheGB, CACHE_WARN), under: ARRAY });
   for (const p of Object.values(raw.pveStorage ?? {})) if (p && fin(p.totalGB) && p.totalGB > 0) storage.push(vol(p.label, p.usedGB, p.totalGB, gb(p.usedGB), gb(p.totalGB), p.sub));
+  // homelab.json storage: rows read from Prometheus (an off-site box); one without both figures is left out
+  if (fresh('prom-checks')) for (const sc of arr(cfg.storage)) {
+    const r = raw.storage?.[sc?.name];
+    if (r && fin(r.used) && fin(r.total) && r.total > 0) storage.push(vol(sc.name, r.used, r.total, bytes(r.used), bytes(r.total), sc.sub ?? `${bytes(Math.max(0, r.total - r.used))} free`));
+  }
   for (const h of hosts) { const r = h.res, p = hostById(h.id)?.type === 'proxmox' ? ratioPct(r?.diskUsed, r?.diskTotal) : null; if (p != null && p >= 70) storage.push(vol(`${h.name} root`, r!.diskUsed!, r!.diskTotal!, bytes(r!.diskUsed), bytes(r!.diskTotal), 'host root filesystem')); }
   for (const g of guests) { const p = g.kind === 'lxc' ? ratioPct(g.res?.diskUsed, g.res?.diskTotal) : null; if (p != null && p >= 70) storage.push(vol(`${g.name} root`, g.res!.diskUsed!, g.res!.diskTotal!, bytes(g.res!.diskUsed), bytes(g.res!.diskTotal), `CT ${g.vmid} root disk`)); }
 
@@ -711,7 +716,7 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
     ],
     probed: !!spCfg?.probeQuery, probeAgeSec: nsAge == null ? null : Math.round(nsAge), autoRecoveries: ns && fin(ns.recoveries) ? ns.recoveries : null,
     backupAt: spCfg?.backupJob ? jobLast(spCfg.backupJob) : null, restoreAt: spCfg?.restoreJob ? jobLast(spCfg.restoreJob) : null,
-    backupJob: spCfg?.backupJob ?? null, restoreJob: spCfg?.restoreJob ?? null, url: nsApp.publicUrl ?? nsApp.url ?? '',
+    backupJob: spCfg?.backupJob ?? null, restoreJob: spCfg?.restoreJob ?? null, ...(spCfg?.backupLabel ? { backupLabel: spCfg.backupLabel } : {}), url: nsApp.publicUrl ?? nsApp.url ?? '',
   } : null;
 
   // ---- network

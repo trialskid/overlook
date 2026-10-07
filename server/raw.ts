@@ -28,6 +28,8 @@ export interface JobRaw {
   /** last run ok: true/false, null = no such signal / series missing */
   ok: boolean | null;
   detail?: string;
+  /** JobConfig.values: name → value (null: no series) */
+  values?: Record<string, number | null>;
   /** 14 daily squares oldest first, or null */
   days: Status[] | null;
   /** one of the job's own expressions failed at run time: its row can't read green (status at least 'unknown') */
@@ -73,6 +75,8 @@ export interface Raw {
   /** H5: apcupsd on mf (slave of Unraid's master), textfile apcupsd.prom, ups="server" */
   /** homelab.json checks: id → value (null: no series) */
   checks: Record<string, number | null> | null;
+  /** homelab.json storage (adapter prom-checks): name → bytes used and in all (null: no series) */
+  storage: Record<string, { used: number | null; total: number | null }> | null;
   ups: UpsRaw | null;
   /** H6: Unraid array, parity and per-disk health (textfile unraid_health.prom, job node-unraid) */
   unraidHealth: UnraidHealthRaw | null;
@@ -196,7 +200,7 @@ export interface EdgeRaw {
 export const emptyRaw = (): Raw => ({
   hostStatus: null, hostRes: null, guests: null, pveStorage: null, containers: null, unraid: null, unraidDisks: null, lanDevices: null,
   network: null, spotlight: null, promTargets: null,
-  checks: null, ups: null, unraidHealth: null, apt: null, edge: null,
+  checks: null, storage: null, ups: null, unraidHealth: null, apt: null, edge: null,
   sonarr: null, radarr: null, qbit: null, nzbget: null, ha: null,
   jobs: null, kuma: null, grafana: null, ntfyUp: null, activity: null, probes: null, devices: null, wud: null, tautulli: null, plexLibrary: null,
   bazarr: null, seerr: null, prowlarr: null, plex: null, chaptarr: null, immich: null, weather: null, versions: null,

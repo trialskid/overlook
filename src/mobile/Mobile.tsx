@@ -282,7 +282,7 @@ function MNetwork() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><span style={eb()}>Network</span><span style={{ fontSize: 11, color: 'var(--mut-3)' }}>Tap a host to expand</span></div>
       <div style={ruled('6px 0 0', 'var(--rule)', { display: 'flex', flexDirection: 'column', overflow: 'hidden' })}>
         {fw && <NetRow depth={0} name={fw.name} status={fw.status}
-          tile={<div style={tileS(0, { background: 'var(--text)', color: 'var(--on-accent)' })}>GW</div>}
+          tile={<div style={tileS(0, { background: 'var(--text)', color: 'var(--on-accent)' })}>{snap.ui.gatewayMonogram ?? 'GW'}</div>}
           sub={<>{fw.ipShort} · {fw.devices ?? '—'} devices · <span style={{ color: fw.wan === 'up' ? undefined : statusColor(fw.wan) }}>WAN {STATUS_WORD[fw.wan].toLowerCase()}</span> · <span style={{ color: n.internet === 'up' ? undefined : statusColor(n.internet) }}>internet {STATUS_WORD[n.internet].toLowerCase()}</span></>} />}
         {n.segments.map(g => <NetRow key={g.id} depth={1} name={g.label} status={g.status} tile={<div style={tileS(25)}>{g.label.slice(0, 2).toUpperCase()}</div>} sub={`behind ${fw?.name ?? 'the gateway'}`} />)}
         {sw && <NetRow depth={fw ? 1 : 0} name={sw.name} status={sw.status} tile={<div style={tileS(230)}>SW</div>}

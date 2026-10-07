@@ -365,7 +365,7 @@ export function Media() {
               <div style={flexCol(11)}>
                 {has.qb && <><div style={row(9)}><AppTile m="QB" h={240} /><div style={{ flex: 1, ...flexCol() }}><AppName name="qBittorrent" ui="qbittorrent" />
                   {/* a blocked qBittorrent is its problem only: amber here, the hand-off follows NZBGet too */}
-                  <span style={{ fontSize: 11, color: vpn === 'firewalled' || vpn === 'disconnected' ? 'var(--warn)' : 'var(--mut-3)', fontWeight: vpn === 'firewalled' || vpn === 'disconnected' ? 600 : undefined }}>{vpn === 'firewalled' ? 'firewalled' : vpn === 'disconnected' ? 'disconnected' : vpn === 'connected' ? 'connected' : 'connection unknown'}</span></div><span style={mono(12, qbNow == null ? 'var(--mut-3)' : 'var(--accent)')}>↓{fmt1(qbNow)}</span></div></>}
+                  <span style={{ fontSize: 11, color: vpn === 'firewalled' || vpn === 'disconnected' ? 'var(--warn)' : 'var(--mut-3)', fontWeight: vpn === 'firewalled' || vpn === 'disconnected' ? 600 : undefined }}>{[snap.ui.qbittorrentVia && `via ${snap.ui.qbittorrentVia}`, vpn === 'firewalled' ? 'firewalled' : vpn === 'disconnected' ? 'disconnected' : vpn === 'connected' ? (snap.ui.qbittorrentVia ? '' : 'connected') : 'connection unknown'].filter(Boolean).join(' · ')}</span></div><span style={mono(12, qbNow == null ? 'var(--mut-3)' : 'var(--accent)')}>↓{fmt1(qbNow)}</span></div></>}
                 {has.nz && <div style={row(9)}><AppTile m="NZ" h={145} /><span style={{ flex: 1 }}><AppName name="NZBGet" ui="nzbget" /></span><span style={mono(12, 'var(--mut-1)', { whiteSpace: 'nowrap' })} title={m.nzbget ? undefined : media}>{m.nzbget ? `${fmt1(m.nzbget.todayGB)} GB today` : '—'}</span></div>}
               </div>
             </Stage>
@@ -410,7 +410,7 @@ export function Media() {
             </> : <>
               <Stat v={fmt(m.qbit?.leeching)} k="Leeching" size={18} /><Stat v={fmt(m.qbit?.seeding)} k="Seeding" size={18} />
               <Stat v={m.nzbget ? `${fmt1(m.nzbget.todayGB)} GB` : '—'} k="NZBGet today" size={18} />
-              <div style={flexCol()}><span style={mono(18, connColor(m.qbit?.conn))}>{connText(m.qbit?.conn)}</span><span style={{ fontSize: 11, color: 'var(--mut-3)' }}>qBittorrent</span></div>
+              <div style={flexCol()}><span style={mono(18, connColor(m.qbit?.conn))}>{connText(m.qbit?.conn)}</span><span style={{ fontSize: 11, color: 'var(--mut-3)' }}>qBittorrent{snap.ui.qbittorrentVia ? ` via ${snap.ui.qbittorrentVia.split(' · ')[0]}` : ''}</span></div>
             </>}
           </div>
         </div>

@@ -11,6 +11,7 @@ import { failPath, incidentItem } from '../../src/lib/incident.ts';
 import { setUi } from '../../src/lib/uiconfig.ts';
 import { automationRows } from '../../shared/health.ts';
 import { recentQ } from '../../server/adapters/prom-infra.ts';
+import { fillDetail } from '../../server/derive/util.ts';
 import type { HomelabConfig, SourceView } from '../../shared/types.ts';
 import type { Adapter } from '../../server/adapters/types.ts';
 
@@ -159,4 +160,59 @@ test('spotlight window: a bare selector gets the exact 150 s range, an expressio
   assert.equal(recentQ('app_ready'), 'max(max_over_time(app_ready[150s]))');
   assert.equal(recentQ(' app_ready{job="x"} '), 'max(max_over_time(app_ready{job="x"}[150s]))');
   assert.equal(recentQ('min(a_ready) * b_ready'), 'max_over_time((max(min(a_ready) * b_ready))[150s:15s])');
+});
+
+test('checks: a Kuma check reads its monitors, with words for its states', () => {
+  const cfg = structuredClone(config), raw0 = mockRaw(cfg), id = raw0.kuma![0].id;
+  cfg.checks!.push({ id: 'outage-push', name: 'Outage push', kuma: [id], words: { 1: 'reachable', 0: 'not reachable' }, below: true, danger: 1, where: 'second tunnel · from outside' });
+  const up = snap(mockRaw(cfg), cfg).health.alerting.find(a => a.name === 'Outage push')!;
+  assert.deepEqual([up.state, up.tone, up.where], ['reachable', 'ok', 'second tunnel · from outside']);
+  const raw = mockRaw(cfg);
+  raw.kuma = raw.kuma!.map(m => (m.id === id ? { ...m, status: 'down' as const } : m));
+  const s = snap(raw, cfg);
+  assert.deepEqual([s.health.alerting.find(a => a.name === 'Outage push')!.state, s.health.alerting.find(a => a.name === 'Outage push')!.tone], ['not reachable', 'danger']);
+  assert.ok(ids(s, 'danger').includes('check-outage-push'), ids(s).join(', '));
+  raw.kuma = raw.kuma!.filter(m => m.id !== id);
+  assert.equal(snap(raw, cfg).health.alerting.find(a => a.name === 'Outage push')!.state, 'no Kuma monitor');
+});
+
+test("checks: format 'ago' shows an epoch as an age, text wraps it, and warn/danger are ages in seconds", () => {
+  const cfg = structuredClone(config);
+  cfg.checks!.push({ id: 'watchdog', name: 'Watchdog', query: 'max(watchdog_last_run_timestamp_seconds)', format: 'ago', text: 'last run {value}', warn: 600, danger: 3600 });
+  const raw = mockRaw(cfg);
+  raw.checks!.watchdog = Date.now() / 1000 - 20;
+  assert.deepEqual((({ state, tone }) => ({ state, tone }))(snap(raw, cfg).health.alerting.find(a => a.name === 'Watchdog')!), { state: 'last run just now', tone: 'ok' });
+  raw.checks!.watchdog = Date.now() / 1000 - 2 * 3600;
+  const s = snap(raw, cfg), row = s.health.alerting.find(a => a.name === 'Watchdog')!;
+  assert.deepEqual([row.state, row.tone], ['last run 2 h ago', 'danger']);
+  assert.equal(s.attention.find(a => a.id === 'check-watchdog')?.detail, 'older than 1 h');
+});
+
+test('storage: a row read from Prometheus joins Health › Storage; one without figures is left out', () => {
+  const cfg = structuredClone(config);
+  cfg.storage = [{ name: 'Off-site box', used: 'offsite_used_bytes', total: 'offsite_total_bytes' }, { name: 'Bucket', used: 'b_used', total: 'b_total' }];
+  const raw = mockRaw(cfg);
+  raw.storage = { 'Off-site box': { used: 2.1e12, total: 5e12 }, Bucket: { used: null, total: 1e12 } };
+  const v = snap(raw, cfg).health.storage;
+  assert.deepEqual((({ used, cap, pct, sub }) => ({ used, cap, pct, sub }))(v.find(x => x.name === 'Off-site box')!), { used: '2.1 TB', cap: '5 TB', pct: 42, sub: '2.9 TB free' });
+  assert.ok(!v.some(x => x.name === 'Bucket'));
+});
+
+test('jobs: detail fills from values; a part without its value drops out, |word replaces a 0', () => {
+  const cfg = structuredClone(config), kopia = cfg.jobs.find(j => j.id === 'kopia')!;
+  kopia.detail = '{ready}/{total} mounts · {paused|none} paused · {gone} gone';
+  kopia.values = { ready: 'sum(m_ready)', total: 'count(m_ready)', paused: 'sum(p)', gone: 'g' };
+  const raw = mockRaw(cfg);
+  raw.jobs!.kopia = { ...raw.jobs!.kopia, values: { ready: 5, total: 5, paused: 0, gone: null } };
+  assert.equal(snap(raw, cfg).health.jobs.find(j => j.id === 'kopia')!.detail, '5/5 mounts · none paused');
+  assert.equal(fillDetail('{n} new at {t:clock} · login to {d:day}', { n: 11, t: Date.now() / 1000 - 60, d: null }, Date.now()).split(' · ').length, 1);
+});
+
+test('ui: the gateway tile, the qBittorrent line and the spotlight backup label come from config', () => {
+  assert.equal(snap().ui.gatewayMonogram, 'GW');
+  const cfg = structuredClone(config);
+  cfg.ui = { ...cfg.ui, monograms: { ...cfg.ui?.monograms, router: 'OP' }, qbittorrentVia: 'a VPN container · WireGuard' };
+  cfg.spotlight = { app: 'Nextcloud', backupJob: 'kopia', backupLabel: 'Last dump' };
+  const s = snap(mockRaw(cfg), cfg);
+  assert.deepEqual([s.ui.gatewayMonogram, s.ui.qbittorrentVia, s.spotlight?.backupLabel], ['OP', 'a VPN container · WireGuard', 'Last dump']);
 });

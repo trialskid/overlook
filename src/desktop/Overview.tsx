@@ -351,7 +351,7 @@ export function Spotlight({ pad = '16px 0 16px', gap = 9 }: { pad?: string; gap?
   if (!on(snap, 'spotlight')) return null;
   const n = snap.spotlight, probe = aged(n?.probeAgeSec, snap);
   const rule = n?.status === 'down' ? 'var(--danger-rule)' : n?.status === 'degraded' ? 'var(--warn-rule)' : 'var(--rule)';
-  const jobs = n ? [n.backupJob && <>Last backup <span style={mono(11.5, 'var(--text-2)')}>{ago(n.backupAt)}</span></>, n.restoreJob && <>restore test <span style={mono(11.5, 'var(--text-2)')}>{ago(n.restoreAt)}</span></>].filter(Boolean) : [];
+  const jobs = n ? [n.backupJob && <>{n.backupLabel || 'Last backup'} <span style={mono(11.5, 'var(--text-2)')}>{ago(n.backupAt)}</span></>, n.restoreJob && <>restore test <span style={mono(11.5, 'var(--text-2)')}>{ago(n.restoreAt)}</span></>].filter(Boolean) : [];
   return (
     <div style={ruled(pad, rule, flexCol(gap))}>
       <div style={row(8)}>

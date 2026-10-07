@@ -78,7 +78,7 @@ export function NetworkMap() {
         <Dot size={7} color={n.internet !== 'up' ? statusColor(n.internet) : n.tunnel?.status === 'degraded' ? 'var(--warn)' : 'var(--pub)'} />{n.tunnelName}{n.tunnel ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{n.tunnel.text}</span> : null} · {n.publicCount} public
       </div>}
       {gw && <div style={row(10, { position: 'absolute', left: 381, top: CHAIN_Y.gateway[0], width: 210, boxSizing: 'border-box', padding: '10px 14px', borderRadius: 14, background: 'var(--surface)', border: `1px solid ${fw === 'down' ? 'var(--danger-rule)' : 'var(--line)'}`, boxShadow: 'var(--fw-glow)' })}>
-        <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--text)', color: 'var(--on-accent)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, flex: 'none' }}>GW</div>
+        <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--text)', color: 'var(--on-accent)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, flex: 'none' }}>{snap.ui.gatewayMonogram ?? 'GW'}</div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: 13, fontWeight: 700, ...ellipsis }}>{gw.name}</span>
           <span style={mono(10, fw === 'down' ? 'var(--danger)' : 'var(--mut-3)', ellipsis)}>{gw.ipShort}{fwSub ? ` · ${fwSub}` : ''}</span>

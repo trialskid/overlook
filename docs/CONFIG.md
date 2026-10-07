@@ -103,6 +103,7 @@ The gateway and the switch are optional. Without them the map draws a plain trun
 | `alert` | A Grafana alertname pattern for this job's own alerts, folded into its item. |
 | `family`, `short` | Jobs that share a `family` show as one line. |
 | `link`, `runbook` | Where its item points. |
+| `detail`, `values` | A line of facts on the row. `values` names PromQL queries (one number each); `detail` uses them: `"{ready}/{total} mounts · {new} new at {at:clock}"`. A value shows as a number, or with `:clock` (epoch seconds → "4:06 AM"), `:day` ("Oct 29") or `:ago` ("3 h ago"); `{paused\|none}` shows the word instead of a 0. A ` · ` part whose value has no series is left out. Not for `by` jobs. |
 
 ## Optional sections
 
@@ -113,7 +114,8 @@ The gateway and the switch are optional. Without them the map draws a plain trun
 | `apt` | `apt` | `{ window? }`: when updates get applied, said on update items ("monthly window"). |
 | `edge` | `edge` | `{ mainTunnelJob? }`: the cloudflared job that carries the public endpoints (default: the first). |
 | `prometheus` | | `jobs`: the scrape job names you use (`homeassistant`, `qbittorrent`, `nzbget`, `caddy`, `ntfy`, `cloudflared`). `queries`: replace any built-in query by its key. See [INTEGRATIONS.md](INTEGRATIONS.md). |
-| `checks` | `checks` | Your own PromQL checks (below). |
+| `checks` | `checks` | Your own PromQL or Uptime Kuma checks (below). |
+| `storage` | `checks` | More rows for Health › Storage from Prometheus: `{ name, used, total, sub? }`, `used` and `total` PromQL returning bytes (an off-site box, a cloud bucket). Past `diskWarnPct` / `diskDangerPct` it turns amber / red. |
 | `spotlight` | `spotlight` | One app to keep in view (below). |
 | `devices` | | Smart-home and other gear by IP: `{ name, ip, note, hue }`, matched against the device list. |
 | `versions` | | `[name, version, badge, asOf]` for what no source can read (router or switch firmware), shown as "manual · as of …". |
@@ -133,6 +135,22 @@ The gateway and the switch are optional. Without them the map draws a plain trun
 
 The query returns one number. Past `warn` is amber and past `danger` red; `below: true` flips it (lower is worse). Each check is a row under Health › Alerting, and past a threshold it raises a Needs attention item (`detail`, with `{value}`; `link` for its action). No series reads "no data" and raises nothing. `job`: a [job](#jobs) behind the check (a watchdog's own runs): the row takes the worse of the two tones and the job moves out of Automation.
 
+How the row reads:
+
+| Key | What |
+|---|---|
+| `kuma` | Instead of `query`: Uptime Kuma monitor ids. The value is 1 while every one is up, 0 once one is down (0.5 pending). Pair it with `"below": true, "danger": 1`. |
+| `format` | `"ago"`: the value is an epoch time in seconds, shown as "just now" / "4 min ago"; `warn` and `danger` are then ages in seconds. |
+| `text` | The row's text around the value: `"last run {value}"`. |
+| `words` | A word for an exact value: `{ "1": "reachable", "0": "not reachable" }`. |
+
+```jsonc
+{ "id": "outage-push", "name": "Outage push", "kuma": [42], "words": { "1": "reachable", "0": "not reachable" },
+  "below": true, "danger": 1, "where": "second tunnel · from outside" },
+{ "id": "watchdog", "name": "Watchdog", "query": "max(watchdog_last_run_timestamp_seconds)", "format": "ago",
+  "text": "last run {value}", "warn": 600, "danger": 3600 }
+```
+
 ### spotlight
 
 ```jsonc
@@ -140,7 +158,7 @@ The query returns one number. Past `warn` is amber and past `danger` red; `below
   "app": "Nextcloud",
   "signals": [{ "name": "Database", "query": "nextcloud_db_up", "role": "other" }],
   "probeQuery": "nextcloud_probe_last_run_timestamp_seconds",
-  "backupJob": "nextcloud-dump", "restoreJob": "nextcloud-restore-test"
+  "backupJob": "nextcloud-dump", "restoreJob": "nextcloud-restore-test", "backupLabel": "Last dump"
 }
 ```
 
@@ -155,5 +173,6 @@ A block on the Overview for the one app you care most about (an app from `apps`)
 | `launcher.columns` | Open's columns, each a list of group titles stacked top to bottom. |
 | `launcher.hidden` | Names left out of Open (still found by search), e.g. `["overlook"]`. |
 | `launcher.phonePins` | The phone incident view's eight shortcuts. |
-| `names`, `aliases`, `monograms` | Display names, extra search words, and two-letter tiles, by web UI or app name. |
+| `names`, `aliases`, `monograms` | Display names, extra search words, and two-letter tiles, by web UI or app name. A monogram under the gateway's id replaces its "GW" tile. |
+| `qbittorrentVia` | How qBittorrent reaches the internet, shown under it on Media: `"a VPN container · WireGuard"`. |
 | `openHosts` | Hosts unfolded on the phone's network list at first. |

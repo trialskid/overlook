@@ -77,6 +77,25 @@ export function clock(ms: number, now: number) {
 /** 'Oct 2' (local date of the homelab) */
 export const day = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: process.env.TZ || undefined });
 
+/** A homelab.json detail template filled from named values (JobConfig.detail): '{n}' a number, '{t:clock}', '{t:day}' and
+ *  '{t:ago}' an epoch in seconds, '{n|none}' the word instead of a 0. Parts are split on ' · '; a part whose value is
+ *  missing (no series) is left out, and so is a part naming a value the template has none for. */
+export function fillDetail(tpl: string | undefined, values: Record<string, number | null> | undefined, now: number): string {
+  if (!tpl) return '';
+  return tpl.split(' · ').map(part => {
+    let gone = false;
+    const out = part.replace(/\{(\w+)(?::(clock|day|ago))?(?:\|([^}]*))?\}/g, (_, k: string, f?: string, zero?: string) => {
+      const v = values?.[k];
+      if (!fin(v)) { gone = true; return ''; }
+      if (f === 'clock') return clock(v * 1000, now);
+      if (f === 'day') return day(v * 1000);
+      if (f === 'ago') return ago(v * 1000, now);
+      return v === 0 && zero != null ? zero : fmt(Math.round(v * 10) / 10);
+    });
+    return gone ? '' : out;
+  }).filter(Boolean).join(' · ');
+}
+
 /** Where a program runs, from homelab.json: the guest whose services name it, else the host of an app by that name;
  *  '' when nothing says. Used for the 'where' part of Health rows ('web · reverse proxy'). */
 export function whereOf(cfg: Pick<HomelabConfig, 'guests' | 'apps' | 'hosts'>, re: RegExp): string {

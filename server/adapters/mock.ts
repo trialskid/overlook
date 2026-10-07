@@ -9,7 +9,7 @@ import { jobOf } from '../derive/util.ts';
 import { uiAddr } from '../derive/kuma.ts';
 import { PRODUCT_NAMES } from '../../shared/ui.ts';
 import type { AptRaw, GuestRaw, JobRaw, KumaMonitorRaw, Raw, ResRaw, Sample, UnraidDiskRaw } from '../raw.ts';
-import type { HomelabConfig, Status } from '../../shared/types.ts';
+import type { HomelabConfig, JobConfig, Status } from '../../shared/types.ts';
 
 const rnd = (s: number) => { const x = Math.sin(s * 12.9898) * 43758.5453; return x - Math.floor(x); };
 /** a stable number for a string (seeds per host, guest and monitor) */
@@ -78,6 +78,11 @@ function mockAll(cfg: HomelabConfig): Raw {
     };
   });
 
+  // a job's detail values: a time where its template formats one (:clock and :ago an hour back, :day three weeks on), 3 otherwise
+  const mockValues = (j: JobConfig) => Object.fromEntries(Object.keys(j.values ?? {}).map(k => {
+    const f = new RegExp(`\\{${k}:(clock|day|ago)`).exec(j.detail ?? '')?.[1];
+    return [k, f === 'day' ? now / 1000 + 21 * 86400 : f ? now / 1000 - 3600 : 3];
+  }));
   // jobs: every job with a signal; a `by` job gets one row per (made-up) label value
   const days = (seed: number): Status[] => Array.from({ length: 14 }, (_, j) => (rnd(seed + j * 3) > 0.95 ? 'degraded' : 'up'));
   const jobs: Record<string, JobRaw & { label?: string }> = {};
@@ -87,7 +92,7 @@ function mockAll(cfg: HomelabConfig): Raw {
     const row = (seed: number): JobRaw => ({ lastAt: now - age, ok: true, days: j.maxAgeH >= 24 ? days(seed) : null });
     const onNode = cfg.guests.filter(g => g.host === j.node).length;
     if (j.by) cfg.guests.slice(0, 3).forEach((g, i) => { jobs[`${j.id}:${g.name}`] = { ...row(n * 31 + i), label: g.name }; });
-    else jobs[j.id] = { ...row(n * 31), ...(j.signal === 'proxmox-vzdump' ? { detail: `${onNode}/${onNode} guests` } : {}) };
+    else jobs[j.id] = { ...row(n * 31), ...(j.signal === 'proxmox-vzdump' ? { detail: `${onNode}/${onNode} guests` } : {}), ...(j.values ? { values: mockValues(j) } : {}) };
   });
 
   const probes: NonNullable<Raw['probes']> = {};
@@ -116,7 +121,10 @@ function mockAll(cfg: HomelabConfig): Raw {
   const cfJob = (cfg.edge?.mainTunnelJob ?? jobOf(cfg, 'cloudflared', 'cloudflared')).replace(/[.*+?^${}()|[\]\\]/g, '') || 'cloudflared';
   const otherTunnels = [...new Set(cfg.publicEndpoints.map(e => e.tunnelJob).filter((j): j is string => !!j))];
   // each check comfortably on the good side of its first threshold
-  const fine = (c: NonNullable<HomelabConfig['checks']>[number]) => { const t = c.warn ?? c.danger; return t == null ? 1 : c.below ? t * 1.5 + 1 : t * 0.6; };
+  const fine = (c: NonNullable<HomelabConfig['checks']>[number]) => {
+    const t = c.warn ?? c.danger, v = t == null ? (c.format === 'ago' ? 60 : 1) : c.below ? t * 1.5 + 1 : t * 0.6;
+    return c.format === 'ago' ? now / 1000 - v : v; // an 'ago' check reads an epoch: that many seconds back
+  };
 
   // the router's device list: config infra and smart home on their own IPs, then made-up phones, laptops and TVs
   const infraIps: [string, string, string][] = [
@@ -141,6 +149,7 @@ function mockAll(cfg: HomelabConfig): Raw {
 
   return {
     checks: Object.fromEntries((cfg.checks ?? []).map(c => [c.id, fine(c)])),
+    storage: Object.fromEntries((cfg.storage ?? []).map(v => [v.name, { used: 2.1e12, total: 5e12 }])),
     hostStatus: Object.fromEntries(cfg.hosts.map(h => [h.id, 'up' as Status])),
     hostRes,
     guests,

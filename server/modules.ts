@@ -45,7 +45,7 @@ const DESCRIBED: Partial<Record<ModuleId, (cfg: HomelabConfig) => boolean>> = {
   spotlight: cfg => !!cfg.spotlight?.app,
   unraid: cfg => cfg.hosts.some(h => h.type === 'unraid'),
   ups: () => false, apt: () => false, edge: () => false,
-  checks: cfg => (cfg.checks?.length ?? 0) > 0,
+  checks: cfg => (cfg.checks?.length ?? 0) > 0 || (cfg.storage?.length ?? 0) > 0,
 };
 
 const adaptersOf = (adapters: Adapter[], id: ModuleId) => adapters.filter(a => ADAPTER_MODULES[a.name]?.includes(id));
@@ -86,7 +86,7 @@ export const MODULE_RAW: Partial<Record<ModuleId, (keyof Raw)[]>> = {
   edge: ['edge'],
   sonarr: ['sonarr'], radarr: ['radarr'], qbittorrent: ['qbit'], nzbget: ['nzbget'],
   homeassistant: ['ha'],
-  kuma: ['kuma'], grafana: ['grafana'], checks: ['checks'],
+  kuma: ['kuma'], grafana: ['grafana'], checks: ['checks', 'storage'],
 };
 /** `raw` without the slices of modules that are off (a shallow copy; `raw` itself is untouched). */
 export function gateRaw(raw: Raw, states: Record<ModuleId, ModuleState> | undefined): Raw {

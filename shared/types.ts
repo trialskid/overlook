@@ -53,10 +53,15 @@ export interface HomelabConfig {
     recoveriesQuery?: string;
     /** homelab.json jobs shown in the block (its backup and restore test), and the one that runs the probe */
     backupJob?: string; restoreJob?: string; probeJob?: string;
+    /** what the block calls its backup job's last run (default 'Last backup'), e.g. 'Last dump' */
+    backupLabel?: string;
   };
   /** Your own Prometheus checks (module checks): a row each under Health › Alerting, and a Needs attention item once
    *  past warn / danger. */
   checks?: CheckConfig[];
+  /** More rows for Health › Storage, each read from Prometheus (an off-site box, a cloud bucket): two PromQL queries
+   *  returning bytes. Past attentionRules.diskWarnPct / diskDangerPct it turns amber / red like the other volumes. */
+  storage?: StorageConfig[];
   /** IANA zone for clock times on the page (e.g. 'Europe/London'). Default: TZ, else the system's zone. */
   timezone?: string;
   /** for the weather (Open-Meteo); leave out for no weather */
@@ -138,8 +143,18 @@ export interface HomelabConfig {
 }
 export interface CheckConfig {
   id: string; name: string;
-  /** PromQL that returns one number (the first series counts); no series reads 'no data' */
-  query: string;
+  /** PromQL that returns one number (the first series counts); no series reads 'no data'. Leave out with `kuma`. */
+  query?: string;
+  /** instead of a query: Uptime Kuma monitor ids; the value is 1 while every one is up and 0 once one is down (pending
+   *  or in maintenance reads 0.5). Pair it with `words` and `below`/`danger` (e.g. danger 1, below true). */
+  kuma?: number[];
+  /** 'ago': the value is an epoch time in seconds, shown as 'just now' / '4 min ago'; warn and danger are then ages in
+   *  seconds (past them is worse). Default: a number. */
+  format?: 'number' | 'ago';
+  /** the row's text, with {value} for the value, e.g. 'last run {value}' */
+  text?: string;
+  /** a word for an exact value, e.g. { "1": "reachable", "0": "not reachable" } */
+  words?: Record<string, string>;
   /** thresholds: past warn is amber, past danger red. below: true when lower is worse (e.g. mounts ready). */
   warn?: number; danger?: number; below?: boolean;
   /** shown after the value, e.g. '°C', '%', ' h' */
@@ -176,6 +191,8 @@ export interface UiConfig {
   monograms?: Record<string, string>;
   /** hosts unfolded on the phone's network list at first (default: the first host) */
   openHosts?: string[];
+  /** how qBittorrent reaches the internet, shown under it on Media, e.g. 'a VPN container · WireGuard' */
+  qbittorrentVia?: string;
 }
 /** UiConfig resolved against the product defaults (shared/ui.ts): what the page reads. */
 export interface UiView {
@@ -183,6 +200,10 @@ export interface UiView {
   groups: [string, string[]][]; columns: string[][]; hidden: string[]; phonePins: string[];
   names: Record<string, string>; aliases: Record<string, string>; monograms: Record<string, string>;
   openHosts: string[];
+  /** the gateway's tile on the map: monograms[network.gateway.id], else 'GW' */
+  gatewayMonogram: string;
+  /** UiConfig.qbittorrentVia ('' when not set) */
+  qbittorrentVia: string;
   /** '10.20.0': LAN addresses are shown as '.42' */
   lanPrefix: string;
 }
@@ -264,6 +285,20 @@ export interface JobConfig {
   family?: string;
   /** the job's label inside its family's line ('Paperless'); a `by` row uses its label value. */
   short?: string;
+  /** A line of facts on the job's row, from `values`: '{ready}/{total} mounts · {new} new at {at:clock}'. Each
+   *  {name} is a value, shown as a number, or with :clock (epoch s → '4:06 AM'), :day ('Oct 29'), :ago ('3 h ago') or
+   *  |word (the word instead of a 0: '{paused|none} paused'). A ' · ' part whose value has no series is left out.
+   *  Not for `by` jobs. */
+  detail?: string;
+  /** PromQL per name used in `detail`; each returns one number (the first series counts) */
+  values?: Record<string, string>;
+}
+export interface StorageConfig {
+  name: string;
+  /** PromQL returning bytes used and bytes in all */
+  used: string; total: string;
+  /** the line under it (default: what's free) */
+  sub?: string;
 }
 
 // ---------- snapshot
@@ -509,6 +544,8 @@ export interface Snapshot {
     /** probed: the lab names a probe (spotlight.probeQuery); probeAgeSec null then means no probe data */
     probed: boolean; probeAgeSec: number | null; autoRecoveries: number | null;
     backupAt: number | null; restoreAt: number | null; backupJob: string | null; restoreJob: string | null;
+    /** spotlight.backupLabel (optional: an older server sends none, and the page says 'Last backup') */
+    backupLabel?: string;
     url: string;
   } | null;
   /** recent[].sub (review finding 16, additive and optional): the line under a Recently added poster, 'S2E5', 'Season 2',

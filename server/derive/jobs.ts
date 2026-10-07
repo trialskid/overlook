@@ -3,7 +3,7 @@
 // Ages are computed here from epoch ms on every rebuild, never baked in at poll time.
 import type { HomelabConfig, JobConfig, JobView, Status } from '../../shared/types.ts';
 import type { JobRaw, Raw } from '../raw.ts';
-import { ago, dur, fin } from './util.ts';
+import { ago, dur, fillDetail, fin } from './util.ts';
 
 /** which adapter feeds a job's signal (its source going stale explains a 'no data' row) */
 export const JOB_SOURCE: Record<JobConfig['signal'], string> = { prometheus: 'prom-jobs', 'proxmox-vzdump': 'proxmox', ntfy: 'ntfy', none: '' };
@@ -37,7 +37,7 @@ function row(id: string, name: string, job: JobConfig, r: JobRaw | undefined, no
   const family = job.family || (job.by ? job.name : undefined), short = label ?? job.short;
   return {
     id, name, group: job.group, where: job.where, schedule: job.schedule, status, lastAt, lastAgo: stateOnly ? (r!.ok ? 'current' : 'failing') : ago(lastAt, now),
-    detail: [why, r?.detail].filter(Boolean).join(' · '), days, signal: job.signal, ...(job.link ? { link: job.link } : {}), ...(job.critical ? { critical: true } : {}),
+    detail: [why, r?.detail, label === undefined ? fillDetail(job.detail, r?.values, now) : ''].filter(Boolean).join(' · '), days, signal: job.signal, ...(job.link ? { link: job.link } : {}), ...(job.critical ? { critical: true } : {}),
     ...(family ? { family } : {}), ...(short ? { short } : {}),
   };
 }

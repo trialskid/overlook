@@ -72,6 +72,8 @@ export function resolveUi(cfg: UiInput = {}): UiView {
     aliases: { ...PRODUCT_ALIASES, ...lower(u.aliases) },
     monograms: { ...PRODUCT_MONOGRAMS, ...lower(u.monograms) },
     openHosts: u.openHosts ?? (cfg.hosts?.[0] ? [cfg.hosts[0].id] : []),
+    gatewayMonogram: (cfg.network?.gateway?.id && lower(u.monograms)[cfg.network.gateway.id.toLowerCase()]) || 'GW',
+    qbittorrentVia: u.qbittorrentVia ?? '',
     lanPrefix: lanPrefixOf(cfg.network?.subnet),
   };
 }
