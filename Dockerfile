@@ -1,6 +1,6 @@
 # Overlook: one image, a Hono backend serving the built React page. Your lab's config is mounted, never baked in:
 #   docker run -v ./config:/config:ro --env-file .env -p 8080:8080 ghcr.io/trialskid/overlook
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS build
+FROM node:26-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -11,7 +11,7 @@ COPY shared ./shared
 COPY server ./server
 RUN npm run build
 
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
+FROM node:26-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80
 # HOMELAB_CONFIG: your homelab.json (mount the folder: an editor that saves it as a new file is still seen).
 # Clock times follow homelab.json `timezone`, else TZ (set it in .env), else UTC.
 ENV NODE_ENV=production PORT=8080 DATA_DIR=/data HOMELAB_CONFIG=/config/homelab.json
