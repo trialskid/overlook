@@ -9,6 +9,8 @@ import { applyIncident } from '../../server/incident.ts';
 import { moduleStates } from '../../server/modules.ts';
 import { failPath, incidentItem } from '../../src/lib/incident.ts';
 import { setUi } from '../../src/lib/uiconfig.ts';
+import { automationRows } from '../../shared/health.ts';
+import { recentQ } from '../../server/adapters/prom-infra.ts';
 import type { HomelabConfig, SourceView } from '../../shared/types.ts';
 import type { Adapter } from '../../server/adapters/types.ts';
 
@@ -109,4 +111,52 @@ test('spotlight: none in the example; a configured one gets its block with LAN, 
   const s = snap(mockRaw(cfg), cfg);
   assert.equal(s.spotlight?.name, 'Nextcloud');
   assert.deepEqual(s.spotlight?.signals.map(x => x.name), ['LAN', 'Public', 'Database']);
+});
+
+test('tunnel: an endpoint on another tunnel (tunnelJob) answering does not hide the main tunnel being down', () => {
+  const cfg = structuredClone(config);
+  cfg.publicEndpoints.push({ name: 'Status page', host: 'status.example.com', via: 'tunnel', tunnelJob: 'cloudflared-backup', origin: 'status · nas', expect: [200] } as (typeof cfg.publicEndpoints)[number]);
+  const raw = mockRaw(cfg);
+  for (const h of ['requests.example.com', 'photos.example.com']) raw.probes![h] = { code: null, ms: null, error: 'timeout', at: Date.now() - 60e3 };
+  raw.probes!['status.example.com'] = { code: 200, ms: 50, error: null, at: Date.now() - 60e3 };
+  const s = snap(raw, cfg);
+  assert.equal(s.network.internet, 'down');
+  assert.ok(ids(s, 'danger').includes('internet'), ids(s).join(', '));
+});
+
+test('access points: short names the map segment, the Devices row keeps the full model', () => {
+  const cfg = structuredClone(config);
+  cfg.network.accessPoints!.push({ name: 'AP Guest', ip: '10.20.0.22', segment: 'guest', model: 'Acme X200 (mesh node)', short: 'mesh node' });
+  const s = snap(mockRaw(cfg), cfg);
+  assert.equal(s.network.segments.find(x => x.id === 'guest')!.label, 'AP Guest · mesh node');
+  const rows = s.devices.groups.flatMap(g => g.rows ?? []) as { name: string; sub?: string }[];
+  assert.equal(rows.find(r => r.name === 'AP Guest')?.sub, 'access point · Acme X200 (mesh node)');
+});
+
+test('apps: one with only jobs takes their status, counts as monitored, and lets the job item speak', () => {
+  const cfg = structuredClone(config);
+  cfg.apps.push({ name: 'photo-sync', label: 'Photo sync', host: 'nas', jobs: ['kopia'] });
+  const up = snap(mockRaw(cfg), cfg).apps.find(a => a.name === 'photo-sync')!;
+  assert.equal(up.monitored, true);
+  assert.equal(up.status, 'up');
+  const raw = mockRaw(cfg);
+  raw.jobs!.kopia = { ...raw.jobs!.kopia, ok: false };
+  const s = snap(raw, cfg);
+  assert.equal(s.apps.find(a => a.name === 'photo-sync')!.status, 'down');
+  assert.equal(s.hosts.find(h => h.id === 'nas')!.leaves.find(l => l.key === 'app-photo-sync')?.status, 'down');
+  assert.ok(!ids(s).includes('app-photo-sync'), ids(s).join(', '));
+});
+
+test('checks: one naming a job carries it, so that job leaves Automation', () => {
+  const cfg = structuredClone(config);
+  cfg.checks![0] = { ...cfg.checks![0], job: 'health-report' };
+  const s = snap(mockRaw(cfg), cfg);
+  assert.equal(s.health.alerting.find(a => a.name === 'Hottest disk')?.job, 'health-report');
+  assert.ok(!automationRows(s.health).some(u => u.kind === 'row' && u.row.job.id === 'health-report'));
+});
+
+test('spotlight window: a bare selector gets the exact 150 s range, an expression a subquery', () => {
+  assert.equal(recentQ('app_ready'), 'max(max_over_time(app_ready[150s]))');
+  assert.equal(recentQ(' app_ready{job="x"} '), 'max(max_over_time(app_ready{job="x"}[150s]))');
+  assert.equal(recentQ('min(a_ready) * b_ready'), 'max_over_time((max(min(a_ready) * b_ready))[150s:15s])');
 });

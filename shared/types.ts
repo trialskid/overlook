@@ -70,7 +70,8 @@ export interface HomelabConfig {
     /** The switch the hosts hang off. Leave out to draw none. snmpJob: its snmp_exporter job (port link states). */
     switch?: { id: string; name: string; model?: string; ip: string; firmware?: string; eol?: boolean; mirrorPort?: string; snmpJob?: string };
     /** port: the switch port it's on (its link state is the AP's); segment: the segment it serves (it shares that state) */
-    accessPoints?: { name: string; ip: string; port?: string; segment?: string; model: string }[];
+    /** short: a shorter model for the map's segment label (default: model) */
+    accessPoints?: { name: string; ip: string; port?: string; segment?: string; model: string; short?: string }[];
     /** Other networks behind the gateway (a guest Wi-Fi, an extender): gatewayIf's ifOperStatus is its state; prefix
      *  ('10.30.0') files the device list's addresses on it. */
     segments?: { id: string; name: string; prefix?: string; gatewayIf?: string }[];
@@ -149,6 +150,8 @@ export interface CheckConfig {
   detail?: string;
   /** a page to fix it from (the item's action) */
   link?: string;
+  /** a homelab.json job behind this check: the row takes the worse of the two tones and the job leaves Automation */
+  job?: string;
 }
 export interface UiConfig {
   /** the page and login title (default 'Overlook') */
@@ -228,6 +231,9 @@ export interface AppConfig {
   /** a tool started by hand when needed (qdirstat): no monitor and usually stopped, so it isn't drawn on the network map
    *  as if it were a running service; it stays in Launch, ⌘K and Links → My apps */
   onDemand?: boolean;
+  /** job ids (homelab.json jobs) that also speak for this app, for one no Kuma monitor or probe can watch: worst
+   *  wins and the app counts as monitored; a failure is reported by the job's own item, not a second one */
+  jobs?: string[];
 }
 export interface JobConfig {
   id: string; name: string; group: 'backup' | 'automation';

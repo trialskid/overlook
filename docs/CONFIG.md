@@ -39,7 +39,7 @@ LAN addresses can be written short: `.42` means the address on `network.subnet` 
 
 `guests` add what Proxmox can't say about a VM or LXC (the guest list itself is live from Proxmox): `{ host, vmid, name, kind: "vm" | "lxc", ip, desc?, services: [...], devices?: [...], cadvisor?, expectRunning? }`. `services` is what runs in it (it decides "where" texts like "web · reverse proxy"). `cadvisor` is its cAdvisor scrape job, for the container count.
 
-`apps` are services that aren't a web UI of their own (containers on a NAS, public apps): `{ name, label, host, url?, publicUrl?, kuma?: [monitor ids], critical?, note?, onDemand? }`. A `critical` app that's down is red rather than amber. `onDemand`: started by hand when needed, so it isn't drawn on the map.
+`apps` are services that aren't a web UI of their own (containers on a NAS, public apps): `{ name, label, host, url?, publicUrl?, kuma?: [monitor ids], jobs?: [job ids], critical?, note?, onDemand? }`. A `critical` app that's down is red rather than amber. `onDemand`: started by hand when needed, so it isn't drawn on the map. `jobs`: for an app no monitor or probe can see (a sync container), the [jobs](#jobs) whose status is its status; the job's own item reports a failure.
 
 ## Web UIs and links
 
@@ -68,6 +68,8 @@ LAN addresses can be written short: `.42` means the address on `network.subnet` 
 }
 ```
 
+An access point's `short` replaces its `model` in the map's segment label (the Devices tab keeps the full model).
+
 The gateway and the switch are optional. Without them the map draws a plain trunk where they would be. With an `snmpJob` (snmp_exporter), the gateway reads as answering or not, its `wanIf` gives the WAN link and the 1 s WAN rate, the switch's port states give each access point's state, and a segment's `gatewayIf` gives that segment's. `tunnel` names the pill beside the Internet one (what carries your public endpoints).
 
 ## Public endpoints
@@ -77,7 +79,7 @@ The gateway and the switch are optional. Without them the map draws a plain trun
 | Key | What |
 |---|---|
 | `name`, `host`, `origin` | What it is, its public host name, and what's behind it ("Seerr · media :5055"). |
-| `via` | `tunnel`, `port-forward` (not probed: no safe GET; shown as configured) or `direct`. `tunnelJob`: the cloudflared job of the tunnel that carries it, when it isn't the main one. |
+| `via` | `tunnel`, `port-forward` (not probed: no safe GET; shown as configured) or `direct`. `tunnelJob`: the cloudflared job of the tunnel that carries it, when it isn't the main one (it then doesn't count toward "the tunnel is down"). |
 | `expect` | HTTP codes that mean healthy, e.g. `[200, 301, 302]`, or `[401]` behind an access gate. `path`: what to GET (default `/`). |
 | `app`, `critical`, `access` | The app it serves; red rather than amber when unreachable; an access gate's name for the row. |
 | `probe`, `check` | `probe: false` to skip probing; `check: "plex"` reads Plex's own remote-access state instead. |
@@ -129,7 +131,7 @@ The gateway and the switch are optional. Without them the map draws a plain trun
 ]
 ```
 
-The query returns one number. Past `warn` is amber and past `danger` red; `below: true` flips it (lower is worse). Each check is a row under Health › Alerting, and past a threshold it raises a Needs attention item (`detail`, with `{value}`; `link` for its action). No series reads "no data" and raises nothing.
+The query returns one number. Past `warn` is amber and past `danger` red; `below: true` flips it (lower is worse). Each check is a row under Health › Alerting, and past a threshold it raises a Needs attention item (`detail`, with `{value}`; `link` for its action). No series reads "no data" and raises nothing. `job`: a [job](#jobs) behind the check (a watchdog's own runs): the row takes the worse of the two tones and the job moves out of Automation.
 
 ### spotlight
 
@@ -142,7 +144,7 @@ The query returns one number. Past `warn` is amber and past `danger` red; `below
 }
 ```
 
-A block on the Overview for the one app you care most about (an app from `apps`). It shows LAN and Public (from Kuma and the public probe) plus its own signals. A signal is a 1/0 query, and its `role` (`lan`, `public` or `other`) says which path it speaks for. A signal counts as down only once it stays 0 for 150 s; a shorter dip shows amber and raises nothing. With a `probeQuery`, signals older than 3 min no longer count.
+A block on the Overview for the one app you care most about (an app from `apps`). It shows LAN and Public (from Kuma and the public probe) plus its own signals. A signal is a 1/0 query, and its `role` (`lan`, `public` or `other`) says which path it speaks for. A signal counts as down only once it stays 0 for 150 s; a shorter dip shows amber and raises nothing. A bare metric selector (`metric` or `metric{…}`) gets an exact 150 s window; any other expression is sampled every 15 s. With a `probeQuery`, signals older than 3 min no longer count.
 
 ## The page (`ui`)
 

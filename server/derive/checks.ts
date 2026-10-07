@@ -17,10 +17,11 @@ export function deriveChecks(cfg: Pick<HomelabConfig, 'checks'>, raw: Raw, fresh
   for (const c of arr(cfg.checks)) {
     if (!c?.id || !c.name) continue;
     const v = fresh ? raw.checks?.[c.id] ?? null : null;
-    if (!fin(v)) { rows.push({ name: c.name, where: c.where ?? 'check', state: fresh ? 'no data' : 'not answering', tone: 'warn' }); continue; }
+    const job = c.job ? { job: c.job } : {};
+    if (!fin(v)) { rows.push({ name: c.name, where: c.where ?? 'check', state: fresh ? 'no data' : 'not answering', tone: 'warn', ...job }); continue; }
     const tone: Tone = past(c, v, c.danger) ? 'danger' : past(c, v, c.warn) ? 'warn' : 'ok';
     const value = show(v, c.unit);
-    rows.push({ name: c.name, where: c.where ?? 'check', state: value, tone });
+    rows.push({ name: c.name, where: c.where ?? 'check', state: value, tone, ...job });
     if (tone !== 'ok') items.push({
       id: `check-${slug(c.id)}`, severity: tone, rank: tone === 'danger' ? 30 : 55, source: 'Prometheus · check',
       title: `${c.name}: ${value}`, detail: (c.detail ?? `${c.below ? 'below' : 'above'} ${show((tone === 'danger' ? c.danger : c.warn)!, c.unit)}`).replace(/\{value\}/g, value),

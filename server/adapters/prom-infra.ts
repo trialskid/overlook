@@ -11,6 +11,9 @@ import type { Status } from '../../shared/types.ts';
 
 const TB = 1e12, GB = 1e9; // decimal units, as the disks are labelled (the array is 51 TB, i.e. 46.4 TiB)
 const DISK = '/mnt/disk[0-9]+';
+/** the best of the last 150 s: a bare selector gets the exact window, any other expression a 15 s subquery */
+const SELECTOR = /^[A-Za-z_:][\w:]*(\{[^{}]*\})?$/;
+export const recentQ = (q: string) => (SELECTOR.test(q.trim()) ? `max(max_over_time(${q.trim()}[150s]))` : `max_over_time((max(${q}))[150s:15s])`);
 
 export const promInfra: Adapter = {
   name: 'prom-infra',
@@ -40,7 +43,7 @@ export const promInfra: Adapter = {
         ...(gwJob && gw?.wanIf ? { wan: `max(ifOperStatus{${gwJob},ifName="${gw.wanIf}"})` } : {}), // 1 up, 2 down, 7 lowerLayerDown …
         ...Object.fromEntries(segs.map(x => [`seg:${x.id}`, `max(ifOperStatus{${gwJob},ifName="${x.gatewayIf}"})`])),
         // the spotlight app's signals: now, and the best of the last 150 s (a lone failed probe is a blip)
-        ...Object.fromEntries(spot.flatMap((x, i) => [[`sp${i}`, `max(${x.query})`], [`sp${i}r`, `max_over_time((max(${x.query}))[150s:15s])`]])),
+        ...Object.fromEntries(spot.flatMap((x, i) => [[`sp${i}`, `max(${x.query})`], [`sp${i}r`, recentQ(x.query)]])),
         ...(config.spotlight?.probeQuery ? { spProbe: `max(${config.spotlight.probeQuery})` } : {}),
         ...(config.spotlight?.recoveriesQuery ? { spRec: `max(${config.spotlight.recoveriesQuery})` } : {}),
       }),

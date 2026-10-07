@@ -169,7 +169,11 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
     return { name: x.name, status: ready(v?.now, v?.recent), blip: blip(v?.now, v?.recent) };
   });
 
-  // ---- apps: worst of their Kuma monitors, the probe of their public host and (the spotlight app) its readiness signals
+  // ---- jobs (before the apps: an app can take its status from its jobs)
+  const { states: jobStates, jobs, unmonitored } = deriveJobs(cfg, raw, now, readAt);
+  const jobLast = (id: string) => jobStates.find(s => s.job.id === id)?.rows.find(r => r.lastAt != null)?.lastAt ?? null;
+
+  // ---- apps: worst of their Kuma monitors, the probe of their public host, their jobs and (the spotlight app) its readiness signals
   const appMonitors = (a: AppConfig) => {
     const pub = hostPort(a.publicUrl)?.host;
     const set = new Set([...(km.byKey.get(`app:${a.name}`) ?? []), ...km.all.filter(m => a.kuma?.includes(m.id)), ...(pub ? monitorsForHost(km, pub) : [])]);
@@ -181,12 +185,13 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
     const lan = ms.filter(m => isLanHost(hostPort(m.url)?.host ?? m.hostname ?? '')).map(m => m.status);
     const pub = [...ms.filter(m => !isLanHost(hostPort(m.url)?.host ?? m.hostname ?? '')).map(m => m.status), ep ? probeStatus(ep) : 'unknown'];
     const nsSig = isNs(a) && ns ? { public: spSig('public').map(x => x.status), origin: spSig('lan').map(x => x.status), network: spSig('other').map(x => x.status) } : null;
-    return { ms, ep, lan: worst([...lan, ...(nsSig?.origin ?? [])]), pub: worst([...pub, ...(nsSig?.public ?? [])]), network: nsSig?.network.length ? worst(nsSig.network) : 'unknown', stale: isNs(a) && nsOld };
+    const jobs = jobStates.filter(j => arr(a.jobs).includes(j.job.id)).map(j => j.status);
+    return { ms, ep, lan: worst([...lan, ...(nsSig?.origin ?? [])]), pub: worst([...pub, ...(nsSig?.public ?? [])]), network: nsSig?.network.length ? worst(nsSig.network) : 'unknown', jobs, stale: isNs(a) && nsOld };
   };
   const apps: AppView[] = appsCfg.map(a => {
     const s = appSignals(a);
-    const status = s.stale && worst([s.lan, s.pub]) !== 'down' ? 'degraded' : worst([s.lan, s.pub, s.network]);
-    const monitored = s.ms.length > 0 || (a.kuma?.length ?? 0) > 0 || (!!s.ep && s.ep.probe !== false) || (isNs(a) && !!ns);
+    const status = s.stale && worst([s.lan, s.pub]) !== 'down' ? 'degraded' : worst([s.lan, s.pub, s.network, ...s.jobs]);
+    const monitored = s.ms.length > 0 || (a.kuma?.length ?? 0) > 0 || (!!s.ep && s.ep.probe !== false) || (isNs(a) && !!ns) || s.jobs.length > 0;
     return { name: a.name, label: a.label, host: a.host, url: a.url ?? null, publicUrl: a.publicUrl ?? null, status: monitored ? status : 'unknown', monitored, critical: !!a.critical, note: a.note ?? '' };
   });
 
@@ -270,10 +275,6 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
     };
   });
 
-  // ---- jobs
-  const { states: jobStates, jobs, unmonitored } = deriveJobs(cfg, raw, now, readAt);
-  const jobLast = (id: string) => jobStates.find(s => s.job.id === id)?.rows.find(r => r.lastAt != null)?.lastAt ?? null;
-
   // ================= Needs attention =================
   const RULE_DISK = { warn: rules?.diskWarnPct ?? 85, danger: rules?.diskDangerPct ?? 95 };
   // Unraid fills its data disks one after another by design, so single disks never raise anything:
@@ -292,7 +293,8 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
   }
 
   // -- internet / tunnel: every tunnel probe failing is one item, not one per app
-  const tunnel = endpoints.filter(e => e.via === 'tunnel' && e.probe !== false);
+  // only what the main tunnel carries: an endpoint on another tunnel (tunnelJob) keeps answering when the main one fails
+  const tunnel = endpoints.filter(e => e.via === 'tunnel' && !e.tunnelJob && e.probe !== false);
   const tunnelSt = tunnel.map(epStatus);
   const allTunnelDown = tunnel.length >= 2 && tunnelSt.every(s => s === 'down');
   const net = raw.network;
@@ -388,6 +390,8 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
     const v = apps.find(x => x.name === a.name)!, s = appSignals(a);
     if (s.ep) handledEp.add(s.ep.host);
     if (v.status !== 'down' && v.status !== 'degraded') continue;
+    const own = worst([s.lan, s.pub, s.network]);
+    if (s.jobs.length && own !== 'down' && own !== 'degraded' && !s.stale) continue; // its jobs' own items say what's wrong
     const lanOk = s.lan !== 'down' && s.network !== 'down';
     if ((allTunnelDown || ops.mainTunnelDown) && lanOk && !s.stale) continue; // the internet or tunnel item explains it
     const failed = [s.lan === 'down' && 'LAN check down', s.pub === 'down' && 'public URL failing', s.network === 'down' && 'container network not ready', s.stale && `availability probe ${dur(nsLag!)} old`].filter(Boolean) as string[];
@@ -737,7 +741,7 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
       aps: aps.map(a => ({ name: a.name, port: a.port, status: bool(net?.ports?.[a.port]) })),
       segments: segC.map(sg => {
         const ap = arr(cfg.network?.accessPoints).find(a => a.segment === sg.id);
-        return { id: sg.id, label: ap ? `${ap.name} · ${ap.model}` : sg.name, status: sg.gatewayIf && gwC?.snmpJob ? bool(net?.segments?.[sg.id]) : 'unknown' };
+        return { id: sg.id, label: ap ? `${ap.name} · ${ap.short ?? ap.model}` : sg.name, status: sg.gatewayIf && gwC?.snmpJob ? bool(net?.segments?.[sg.id]) : 'unknown' };
       }),
       publicCount: endpoints.length,
       tunnelName: cfg.network?.tunnel ?? null,
