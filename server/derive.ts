@@ -450,11 +450,13 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
       continue;
     }
     // failed: it broke after the newest success; overdue: since the oldest row passed its max age
+    // running long: every bad row is a run still going past 4 h (Kopia's checkpoints), since the earliest one started
     const newest = maxOf(badRows.map(r => r.lastAt)), oldest = minOf(badRows.map(r => r.lastAt));
+    const running = badRows.every(r => r.runningSince != null) ? minOf(badRows.map(r => r.runningSince)) : null;
     add({
       ...base, id: `job-${j.id}`, severity: j.critical ? 'danger' : 'warn', rank: j.critical ? 35 : s.status === 'down' ? 46 : 57, // a failed run before a disk filling up
-      since: s.status === 'down' ? newest : oldest != null ? oldest + j.maxAgeH * 3600e3 : null,
-      title: s.status === 'down' ? `${j.name} failed` : `${j.name} is overdue`,
+      since: running ?? (s.status === 'down' ? newest : oldest != null ? oldest + j.maxAgeH * 3600e3 : null),
+      title: running != null ? `${j.name} running long` : s.status === 'down' ? `${j.name} failed` : `${j.name} is overdue`,
       detail: [j.where, ...parts.slice(0, 3).map(part), parts.length > 3 ? `+${parts.length - 3} more` : ''].filter(Boolean).join(' · '),
     });
   }

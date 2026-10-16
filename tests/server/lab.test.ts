@@ -208,6 +208,30 @@ test('jobs: detail fills from values; a part without its value drops out, |word 
   assert.equal(fillDetail('{n} new at {t:clock} · login to {d:day}', { n: 11, t: Date.now() / 1000 - 60, d: null }, Date.now()).split(' · ').length, 1);
 });
 
+test('jobs: a run still going reads "running" under 4 h, amber "running long" after; a dead one still reads failed', () => {
+  const raw = mockRaw(), now = Date.now(), H = 3600e3;
+  const job = (lastH: number, runH?: number) => {
+    raw.jobs!.kopia = { ...raw.jobs!.kopia, lastAt: now - lastH * H, ok: false, runningSince: runH == null ? null : now - runH * H };
+    const s = snap(raw);
+    return { row: s.health.jobs.find(j => j.id === 'kopia')!, item: s.attention.find(a => a.id === 'job-kopia') };
+  };
+  let { row, item } = job(22, 2);
+  assert.equal(row.status, 'up');
+  assert.match(row.detail, /^running · started 2 h ago/);
+  assert.equal(item, undefined);
+
+  ({ row, item } = job(22, 5));
+  assert.equal(row.status, 'degraded');
+  assert.match(row.detail, /^still running · started 5 h ago/);
+  assert.equal(item?.title, 'Kopia off-site running long');
+  assert.equal(item?.since, now - 5 * H);
+
+  assert.equal(job(46, 1).row.status, 'degraded'); // a short run on top of a missed day is still overdue
+  ({ row, item } = job(22));
+  assert.equal(row.status, 'down');
+  assert.equal(item?.title, 'Kopia off-site failed');
+});
+
 test('ui: the gateway tile, the qBittorrent line and the spotlight backup label come from config', () => {
   assert.equal(snap().ui.gatewayMonogram, 'GW');
   const cfg = structuredClone(config);

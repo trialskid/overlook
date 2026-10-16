@@ -27,6 +27,8 @@ export interface JobRaw {
   lastAt: number | null;
   /** last run ok: true/false, null = no such signal / series missing */
   ok: boolean | null;
+  /** epoch ms a run still going started (the job's `running` expression); null/absent = none */
+  runningSince?: number | null;
   detail?: string;
   /** JobConfig.values: name → value (null: no series) */
   values?: Record<string, number | null>;

@@ -99,7 +99,7 @@ The gateway and the switch are optional. Without them the map draws a plain trun
 |---|---|
 | `group` | `backup` or `automation` (Health's two sections). |
 | `maxAgeH` | Older than this is overdue (amber; red for a `critical` job). |
-| `signal` | `prometheus` (`last`: PromQL for the last success's epoch seconds; `ok`: 1/0 for the last run; `by`: one row per label value), `proxmox-vzdump` (`node`: the host id), `ntfy` (`topic`, `match`: a message marks a run) or `none` (listed as not monitored, with a `note`). |
+| `signal` | `prometheus` (`last`: PromQL for the last success's epoch seconds; `ok`: 1/0 for the last run; `running`: the start epoch seconds of a run still going, so a long upload reads "running" for its first 4 h and amber "running long" after, not failed; `by`: one row per label value), `proxmox-vzdump` (`node`: the host id), `ntfy` (`topic`, `match`: a message marks a run) or `none` (listed as not monitored, with a `note`). |
 | `alert` | A Grafana alertname pattern for this job's own alerts, folded into its item. |
 | `family`, `short` | Jobs that share a `family` show as one line. |
 | `link`, `runbook` | Where its item points. |

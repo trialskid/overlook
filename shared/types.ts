@@ -267,6 +267,10 @@ export interface JobConfig {
   last?: string;
   /** prometheus: expression returning 1 (last run ok) / 0 (failed). Missing series = unknown, not ok. */
   ok?: string;
+  /** prometheus: expression returning the start epoch (s) of a run still going (Kopia's checkpoints); a failed row
+   *  with one reads 'running' (ok) for its first 4 h, then 'still running' (amber), not failed. The expression itself
+   *  decides how long a run may go. */
+  running?: string;
   /** prometheus: one row per value of this label (e.g. 'source' for Kopia, 'ct' for a per-container job). */
   by?: string;
   /** proxmox-vzdump: host id. */
@@ -370,6 +374,8 @@ export interface JobView {
   lastAgo: string;
   /** one line: why it's not ok, or a useful fact ('7/7 guests', '16.4 MB') */
   detail: string;
+  /** epoch ms a run still going started (it isn't ok yet, but hasn't failed) */
+  runningSince?: number;
   /** 14 daily squares, oldest first; null when the source has no history */
   days: Status[] | null;
   signal: JobConfig['signal'];

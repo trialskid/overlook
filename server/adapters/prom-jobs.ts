@@ -1,6 +1,7 @@
 // Prometheus · jobs & backups (every 60 s): every config.jobs entry with signal 'prometheus'.
 //   last: last-success epoch (s) → lastAt (ms); ok: 1 / 0 → true / false. A missing series is null (no data).
-//   by:   one row per value of that label, keyed `${id}:${value}`; an `ok` series without the label applies to
+//   running: start epoch (s) of a run still going → runningSince (ms); no series = nothing running.
+//   by:  one row per value of that label, keyed `${id}:${value}`; an `ok` series without the label applies to
 //         every row of the job (so homelab.json can give a per-container backup job a per-row ok: its global last_run_success
 //         would mark every CT failed when one did). Several series for one row read as the worst: the oldest
 //         last, the lowest ok.
@@ -54,6 +55,7 @@ export const promJobs: Adapter = {
     for (const j of jobs) {
       if (j.last) qs[`last:${j.id}`] = worst(j, j.last);
       if (j.ok) qs[`ok:${j.id}`] = worst(j, j.ok);
+      if (j.running) qs[`run:${j.id}`] = worst(j, j.running);
       for (const [k, q] of vals(j)) qs[`val:${j.id}:${k}`] = q;
     }
     const { out: r, failed } = await rowsAndErrors(qs);
@@ -66,7 +68,7 @@ export const promJobs: Adapter = {
 
     const out: Rows = {};
     for (const j of jobs) {
-      const last: Row[] = r[`last:${j.id}`] ?? [], ok: Row[] = r[`ok:${j.id}`] ?? [];
+      const last: Row[] = r[`last:${j.id}`] ?? [], ok: Row[] = r[`ok:${j.id}`] ?? [], running: Row[] = r[`run:${j.id}`] ?? [];
       const err = [failed[`ok:${j.id}`] && `ok signal failed: ${failed[`ok:${j.id}`]}`, failed[`last:${j.id}`] && `last-success signal failed: ${failed[`last:${j.id}`]}`].filter(Boolean).join(' · ');
       const days = (key: string) => (j.last && j.maxAgeH > 0 && fresh ? fresh[key] ?? Array(14).fill('unknown') : null);
       const allOk = ok.find(x => !j.by || !x.m[j.by]); // an ok series without the `by` label covers every row
@@ -75,9 +77,10 @@ export const promJobs: Adapter = {
       if (!keys.size) keys.set(j.id, undefined); // nothing at all: one explicit no-data row
       for (const [key, value] of keys) {
         const l = last.find(x => rowKey(j, x.m) === key), o = ok.find(x => j.by && value !== undefined && x.m[j.by] === value) ?? allOk;
+        const run = running.find(x => rowKey(j, x.m) === key);
         const values = key === j.id && vals(j).length ? { values: Object.fromEntries(vals(j).map(([k]) => [k, r[`val:${j.id}:${k}`]?.[0]?.v ?? null])) } : {};
         out[key] = {
-          ...values, lastAt: l ? toMs(l.v) : null, ok: o ? o.v >= 1 : null,
+          ...values, lastAt: l ? toMs(l.v) : null, ok: o ? o.v >= 1 : null, ...(run ? { runningSince: toMs(run.v) } : {}),
           days: days(key), ...(value !== undefined ? { label: value } : {}), ...(err ? { error: err } : {}),
         };
       }

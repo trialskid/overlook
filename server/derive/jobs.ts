@@ -10,11 +10,19 @@ export const JOB_SOURCE: Record<JobConfig['signal'], string> = { prometheus: 'pr
 
 export interface JobState { job: JobConfig; rows: JobView[]; status: Status; source: string }
 
+/** a run still going reads ok this long (a daily backup upload can take a couple of hours), then 'running long' */
+const RUN_LONG_H = 4;
+
 /** `readAt`: when the source last answered. Overdue is judged as of then, so a source that is a minute behind
  *  (still within its max age) can't make an every-minute job look late; the source's own item covers the lag. */
 function rowStatus(r: JobRaw | undefined, job: JobConfig, readAt: number): Status {
   if (!r) return 'unknown';
-  if (r.ok === false) return 'down';
+  if (r.ok === false) {
+    if (!fin(r.runningSince)) return 'down';
+    // a run still going is late, not failed: only once it passes RUN_LONG_H, or the last success its max age
+    const late = readAt - r.runningSince > RUN_LONG_H * 3600e3 || (fin(r.lastAt) && job.maxAgeH > 0 && readAt - r.lastAt > job.maxAgeH * 3600e3);
+    return late ? 'degraded' : 'up';
+  }
   if (r.error) return 'unknown'; // half its signal broke: the other half answering is not 'ok'
   if (fin(r.lastAt) && job.maxAgeH > 0 && readAt - r.lastAt > job.maxAgeH * 3600e3) return 'degraded';
   if (!fin(r.lastAt) && r.ok == null) return 'unknown';
@@ -24,7 +32,9 @@ function rowStatus(r: JobRaw | undefined, job: JobConfig, readAt: number): Statu
 /** `label`: the `by` label value of a per-label row (undefined for a job-level row) */
 function row(id: string, name: string, job: JobConfig, r: JobRaw | undefined, now: number, readAt: number, label?: string): JobView {
   const status = rowStatus(r, job, readAt), lastAt = fin(r?.lastAt) ? r!.lastAt : null;
-  const why = status === 'down' ? 'last run failed'
+  const runningSince = r?.ok === false && fin(r.runningSince) ? r.runningSince : null;
+  const why = runningSince != null ? `${status === 'up' ? 'running' : 'still running'} · started ${ago(runningSince, now)}`
+    : status === 'down' ? 'last run failed'
     : status === 'degraded' ? `overdue · expected within ${dur(job.maxAgeH * 3600)}`
     : status === 'unknown' ? r?.error ?? 'no data' : '';
   // a state-only signal (e.g. HA's 'backups stale' sensor) has no time to show; say what it reports instead of 'no data'
@@ -37,7 +47,7 @@ function row(id: string, name: string, job: JobConfig, r: JobRaw | undefined, no
   const family = job.family || (job.by ? job.name : undefined), short = label ?? job.short;
   return {
     id, name, group: job.group, where: job.where, schedule: job.schedule, status, lastAt, lastAgo: stateOnly ? (r!.ok ? 'current' : 'failing') : ago(lastAt, now),
-    detail: [why, r?.detail, label === undefined ? fillDetail(job.detail, r?.values, now) : ''].filter(Boolean).join(' · '), days, signal: job.signal, ...(job.link ? { link: job.link } : {}), ...(job.critical ? { critical: true } : {}),
+    detail: [why, r?.detail, label === undefined ? fillDetail(job.detail, r?.values, now) : ''].filter(Boolean).join(' · '), days, signal: job.signal, ...(runningSince != null ? { runningSince } : {}), ...(job.link ? { link: job.link } : {}), ...(job.critical ? { critical: true } : {}),
     ...(family ? { family } : {}), ...(short ? { short } : {}),
   };
 }
