@@ -72,7 +72,7 @@ const title = () => (config.ui?.title || 'Overlook').replace(/[<>&"]/g, '');
 /** The login page: one password field (a hidden username so iOS/macOS Passwords can save and fill it). */
 export const page = (msg = '') => `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0e1014">
-<title>${title()} · sign in</title><link rel="icon" href="/favicon.svg">
+<title>${title()} · sign in</title><link rel="icon" href="/favicon.svg"><link rel="icon" href="/favicon-32.png" sizes="32x32"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 :root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(ellipse 60% 50% at 38% 30%,#161b26 0%,#0e1014 70%);color:#eceef2;font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 form{width:min(320px,calc(100vw - 48px));display:flex;flex-direction:column;gap:14px}

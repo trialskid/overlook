@@ -7,8 +7,8 @@ import { handleLogin, handleLogout, loginEnabled, page, signedIn } from './auth.
 // out of this page and saving the Links tab (server/links.ts, which writes only DATA_DIR/links.json). Everything
 // else, OPTIONS included (so no CORS preflight ever succeeds), is 405.
 const WRITES = new Set(['POST /login', 'POST /logout', 'PUT /api/links']);
-// login (server/auth.ts): everything except /healthz, the login page and the icon needs a signed-in device
-const OPEN = new Set(['/healthz', '/login', '/logout', '/favicon.svg']);
+// login (server/auth.ts): everything except /healthz, the login page and the icons needs a signed-in device
+const OPEN = new Set(['/healthz', '/login', '/logout', '/favicon.svg', '/favicon-32.png', '/apple-touch-icon.png']);
 
 export function gates(app: Hono) {
   app.use('*', async (c, next) => {

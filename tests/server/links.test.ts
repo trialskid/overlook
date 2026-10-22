@@ -174,6 +174,11 @@ test('method gate: the only writes are POST /login, POST /logout and PUT /api/li
   assert.equal((await req('GET', '/api/links')).status, 200);
 });
 
+test('login gate: the icons load signed out (Safari and iOS ask for the PNGs), the page does not', async () => {
+  for (const p of ['/favicon.svg', '/favicon-32.png', '/apple-touch-icon.png']) assert.notEqual((await req('GET', p, undefined, { cookie: undefined })).status, 303, p);
+  for (const p of ['/', '/favicon.ico', '/apple-touch-icon-precomposed.png']) assert.equal((await req('GET', p, undefined, { cookie: undefined })).status, 303, p);
+});
+
 test('PUT /api/links: login, then same-origin, then validation', async () => {
   freshDir();
   const body = { groups: GROUPS, baseUpdatedAt: null };
