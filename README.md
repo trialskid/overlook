@@ -51,6 +51,7 @@ Keep it on your LAN or behind a reverse proxy with a login. It has its own optio
 | `edge` | cloudflared, Caddy and ntfy metrics | tunnels, proxy reloads, push delivery |
 | `checks` | your own PromQL | a row and an item per check past its threshold |
 | `spotlight` | your own readiness PromQL | one app you care most about, kept in view |
+| `restore` | your own PromQL and jobs | the Restore tab: every copy, its age, its proof and what a restore costs (look only) |
 | `devices` | a JSON file your own job writes | the LAN's devices, online and offline |
 | `weather` | Open-Meteo | the header's weather |
 

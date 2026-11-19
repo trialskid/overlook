@@ -28,7 +28,7 @@ sources ──► adapters ──► Hub ──► derive() ──► Snapshot �
 | `server/index.ts` | HTTP routes, SSE, ring buffers, the rebuild loop |
 | `server/config.ts` | homelab.json: defaults, validation, hot reload |
 | `server/modules.ts` | modules: which are on, which adapters serve them, the Raw keys they own |
-| `server/derive/` | jobs, Kuma mapping, attention, devices, checks, ops (ups, unraid, apt, edge) |
+| `server/derive/` | jobs, Kuma mapping, attention, devices, checks, ops (ups, unraid, apt, edge), restore |
 | `server/incident.ts` | `?simulateIncident=1` |
 | `server/adapters/mock.ts` | mock data shaped from the config (`MOCK=1`, `npm run demo`) |
 | `shared/types.ts` | the config, Snapshot and Tick shapes |

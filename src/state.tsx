@@ -5,10 +5,10 @@ import type { GuestView, HostView, Snapshot } from '../shared/types.ts';
 
 /** Review Phase 5: Links became Overview's Bookmarks, Devices a Health section. The House tab is the Home component
  *  (renamed for the page, Oct 6; its anchors stay home-*). */
-export const TABS = ['Overview', 'Health', 'Media', 'House'] as const;
+export const TABS = ['Overview', 'Health', 'Media', 'House', 'Restore'] as const;
 export type Tab = (typeof TABS)[number];
 /** The phone's own tabs (review finding 9): Open = Launch + Links under one search. Devices is a screen under Health. */
-export const M_TABS = ['Overview', 'Health', 'Open', 'Media', 'House'] as const;
+export const M_TABS = ['Overview', 'Health', 'Open', 'Media', 'House', 'Restore'] as const;
 export type MTab = (typeof M_TABS)[number] | 'Devices';
 /** ?overview=classic: today's Overview before review Phase 5, kept as an option. A function (not read at
  *  import) so node tests can load the modules that use it. */

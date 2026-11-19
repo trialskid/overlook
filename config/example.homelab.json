@@ -21,7 +21,8 @@
     "wud",
     "homeassistant",
     "unraid",
-    "checks"
+    "checks",
+    "restore"
   ],
   "timezone": "Europe/London",
   "ui": {
@@ -489,5 +490,93 @@
       "unit": "°C",
       "where": "NAS · smartctl_exporter"
     }
-  ]
+  ],
+  "restore": {
+    "note": "Look only: nothing here restores anything.",
+    "ask": {
+      "url": "https://t.me/acme_desk_bot?text=restore%20{n}",
+      "text": "send “restore {n}” to the desk bot",
+      "label": "Restore…"
+    },
+    "runbook": "https://git.lab.example.com/acme/lab/src/branch/main/restore.md",
+    "items": [
+      {
+        "id": "offsite",
+        "name": "Off-site copy",
+        "newest": "kopia_snapshot_last_success_timestamp_seconds",
+        "expect": 4,
+        "unit": "sources",
+        "proof": "restore-tested",
+        "proofAt": "kopia_restore_test_last_success_timestamp_seconds",
+        "proofNote": "monthly drill, sample files",
+        "cost": "fetch to a side folder by hand, slow"
+      },
+      {
+        "id": "guests",
+        "name": "Proxmox guests",
+        "jobs": [
+          "vzdump-pve1",
+          "vzdump-pve2"
+        ],
+        "expect": 2,
+        "unit": "hosts",
+        "proof": "verified",
+        "proofNote": "vzdump verify",
+        "cost": "restore over the guest from Proxmox, about 10 min each"
+      },
+      {
+        "id": "photos",
+        "name": "Photo library",
+        "newest": "immich_backup_last_success_timestamp_seconds",
+        "proof": "restore-tested",
+        "proofOn": "2026-10-02",
+        "proofNote": "drill, samples",
+        "cost": "copy back from the NAS share, about an hour"
+      },
+      {
+        "id": "nas-snapshots",
+        "name": "NAS snapshots",
+        "newest": "zfs_snapshot_newest_timestamp_seconds{pool=\"tank\"}",
+        "expect": 10,
+        "unit": "datasets",
+        "proof": "finished",
+        "cost": "copy back from .zfs/snapshot, quick"
+      },
+      {
+        "id": "db",
+        "name": "Database dumps",
+        "newest": "pg_dump_last_success_timestamp_seconds",
+        "proof": "verified",
+        "proofNote": "pg_restore --list",
+        "cost": "load a dump into a fresh database by hand",
+        "ask": false,
+        "link": "https://git.lab.example.com/acme/lab/src/branch/main/restore.md#databases"
+      },
+      {
+        "id": "host-config",
+        "name": "Host configs",
+        "newest": "host_config_backup_last_success_timestamp_seconds",
+        "maxAgeH": 200,
+        "proof": "finished",
+        "cost": "copy the files back by hand"
+      },
+      {
+        "id": "cloud",
+        "name": "Cloud bucket",
+        "newest": "rclone_sync_last_success_timestamp_seconds",
+        "proof": "finished",
+        "cost": "download, then copy back; costs egress"
+      },
+      {
+        "id": "laptops",
+        "name": "Laptop backups",
+        "newest": "restic_snapshot_last_success_timestamp_seconds",
+        "expect": 2,
+        "unit": "laptops",
+        "proof": "verified",
+        "proofNote": "restic check",
+        "cost": "restic restore on the laptop"
+      }
+    ]
+  }
 }

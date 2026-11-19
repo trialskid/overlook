@@ -19,6 +19,7 @@ import { deriveJobs, type JobState } from './derive/jobs.ts';
 import { foldGrafana, grafanaSeverity, shipItems, sortItems, statusLine, type Item } from './derive/attention.ts';
 import { deriveOps } from './derive/ops.ts';
 import { deriveChecks } from './derive/checks.ts';
+import { deriveRestore } from './derive/restore.ts';
 import { deriveDevices, type InfraDevice } from './derive/devices.ts';
 import { allOn, gateRaw } from './modules.ts';
 import { resolveUi } from '../shared/ui.ts';
@@ -791,6 +792,8 @@ export function derive(rawIn: Raw, sources: SourceView[], opts: DeriveOpts, cfg:
       haUrl: uiAt('homeassistant') ?? '',
     },
     devices,
+    // look only, and no attention items: jobs and Grafana already raise what a backup's failure means
+    restore: mod('restore') ? deriveRestore(cfg, raw, jobStates, n => { const x = src(n); return x && FRESH.has(x.conn) && fin(x.lastOk) ? x.lastOk : null; }, now) : null,
     // the saved list (DATA_DIR/links.json, server/links.ts) when index.ts passes it, else homelab.json's seed
     links: links.groups.map(g => ({ group: g.name, items: g.items.map(l => linkView(l.name, l.url)) })),
     linksMeta: { updatedAt: links.updatedAt, fromFile: links.fromFile, error: links.error },

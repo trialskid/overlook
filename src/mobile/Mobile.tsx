@@ -8,7 +8,7 @@ import { classicOverview, useApp, type MTab } from '../state.tsx';
 import { on as modOn, visibleMTabs } from '../lib/modules.ts';
 import { linkChip, linkState, useNow } from '../lib/live.ts';
 import {
-  GUEST_HUE, STATUS_WORD, ago, agoShort, agoText, aged, cellColor, clockSec, fmt, fmt1, fmtBytes, fullIp, greeting, hueOf, jobAgo, jobColor, jobText, last, monoOf, paths, pveUrl, scaleMax,
+  GUEST_HUE, STATUS_WORD, ago, agoShort, agoText, aged, cellColor, clockSec, clockText, fmt, fmt1, fmtBytes, fullIp, greeting, hueOf, jobAgo, jobColor, jobText, last, monoOf, paths, pveUrl, scaleMax,
   scrollToId, secSince, sevColors, statusColor, statusText, tint, toneColor, uiUrl, whenText, whyMissing,
 } from '../lib/util.ts';
 import { Badge, Bar, Chip, Dot, FrozenBanner, NotConnected, SR, SearchIcon, StatusDot, Tag, UptimeCells, ellipsis, eyebrow, flexCol, mono, row, ruled, useFrozen } from '../lib/ui.tsx';
@@ -25,6 +25,7 @@ import { useLinkFilter } from '../desktop/Links.tsx';
 import { EditButton, LinksEditorView, LinksNote, useLinksEditor } from '../desktop/LinksEdit.tsx';
 import { DevDot, Hl, devCounts, devIp, groupSub, lanFolded, lanRows, matchedLine, useDeviceGroups } from '../desktop/Devices.tsx';
 import { DisksBlock, NotYetLine, OPS_COLS, OpsEmpty, OpsRow, PowerBlock, UpdatesLine, UpsHomeRow, opsMissing } from '../desktop/Ops.tsx';
+import { Ask, Series, ageColor, proofLook, stamp } from '../desktop/Restore.tsx';
 import { Heartbeat, useBeatClock } from '../lib/motion.tsx';
 import type { Attention, Conn, DeviceRow, DevicesView, JobView, Kpi, LeafView, Monitor, Res, Snapshot, SourceView, Status, Volume } from '../../shared/types.ts';
 
@@ -112,7 +113,7 @@ export function Mobile() {
   // a tab whose modules a config reload turned off falls back to Overview (Devices sits under Health)
   const ui = u0.mTab === 'Devices' || visibleMTabs(s0).includes(u0.mTab) ? u0 : { ...u0, mTab: 'Overview' as MTab };
   const screen = ui.mTab === 'Overview' ? (ui.mScreen === 'guest' ? <MGuest /> : <MOverview />)
-    : ui.mTab === 'Open' ? <MOpen /> : ui.mTab === 'Media' ? <MMedia /> : ui.mTab === 'Health' ? <MHealth /> : ui.mTab === 'House' ? <MHome /> : <MDevices />;
+    : ui.mTab === 'Open' ? <MOpen /> : ui.mTab === 'Media' ? <MMedia /> : ui.mTab === 'Health' ? <MHealth /> : ui.mTab === 'House' ? <MHome /> : ui.mTab === 'Restore' ? <MRestore /> : <MDevices />;
   const { snap } = useApp();
   const go = (t: MTab) => { set({ mTab: t, mScreen: 'home' }); scrollTo(0, 0); };
   const old = useFrozen();
@@ -1110,6 +1111,44 @@ const MDevRow = ({ r, id, q }: { r: DeviceRow; id: DevicesView['groups'][number]
     </div>
   );
 };
+
+// ---------------------------------------------------------------- Restore (look only: the one link opens another app)
+
+function MRestore() {
+  const { snap } = useApp();
+  const r = snap.restore;
+  if (!r) return null;
+  return (
+    <div style={{ ...PAGE, gap: 22 }}>
+      <div style={flexCol(8)}>
+        <H1>Restore</H1>
+        <span style={{ fontSize: 13, color: 'var(--mut-2)', lineHeight: 1.4 }}>{r.note}</span>
+      </div>
+      <Section id="restore" title="Copies" right={<span style={{ fontSize: 11, color: 'var(--mut-3)', flex: 'none', whiteSpace: 'nowrap' }}>read at <span style={mono(11, 'var(--text-2)')}>{r.readAt != null ? clockText(new Date(r.readAt)) : '—'}</span></span>}>
+        {r.items.map(it => { const p = proofLook(it); return (
+          <div key={it.id} id={`restore-${it.id}`} data-restore={it.id} style={flexCol(4, { padding: '12px 0', borderBottom: RULE3, scrollMarginTop: 16 })}>
+            <div style={row(10, { minWidth: 0 })}>
+              <span style={mono(12, 'var(--mut-3)', { width: 16, flex: 'none' })}>{it.n}</span>
+              {it.link ? <a href={it.link} {...EXT} style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', ...ellipsis }}>{it.name}</a>
+                : <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 600, ...ellipsis }}>{it.name}</span>}
+              <span style={{ fontSize: 12, color: p.color, fontWeight: it.proof === 'restore-tested' ? 600 : 400, flex: 'none' }}>{p.text}</span>
+            </div>
+            <div style={flexCol(3, { paddingLeft: 26, minWidth: 0 })}>
+              {it.newest != null
+                ? <span style={{ fontSize: 13, color: 'var(--text-2)' }}><span style={mono(12.5)}>{stamp(it.newest)}</span> · <span style={{ color: ageColor(it) }}>{ago(it.newest)}</span></span>
+                : <span style={{ fontSize: 13, color: 'var(--mut-3)' }}>{it.why}</span>}
+              <Series it={it} />
+              {it.proofNote && <span style={{ fontSize: 12, color: 'var(--mut-3)', overflowWrap: 'anywhere' }}>{it.proofNote}</span>}
+              {it.cost && <span style={{ fontSize: 13, color: 'var(--mut-2)', lineHeight: 1.4, overflowWrap: 'anywhere' }}>{it.cost}</span>}
+              {it.ask && <div style={{ paddingTop: 2 }}><Ask it={it} align="left" tap /></div>}
+            </div>
+          </div>
+        ); })}
+      </Section>
+      {r.runbook && <TapLink href={r.runbook}>Paper runbook ↗</TapLink>}
+    </div>
+  );
+}
 
 function MDevices() {
   const { snap, ui, set } = useApp();

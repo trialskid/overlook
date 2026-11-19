@@ -12,6 +12,7 @@ import { OverviewShape } from './Shape.tsx';
 import { Health } from './Health.tsx';
 import { Media } from './Media.tsx';
 import { Home } from './Home.tsx';
+import { Restore } from './Restore.tsx';
 import type { Tone } from '../../shared/types.ts';
 
 export const DESK_W = 1440;
@@ -42,6 +43,7 @@ export function Desktop({ width }: { width: number }) {
           {tab === 'Health' && <Health />}
           {tab === 'Media' && <Media />}
           {tab === 'House' && <Home />}
+          {tab === 'Restore' && <Restore />}
         </div>
       </div>
     </div>

@@ -17,7 +17,7 @@ export type Tone = 'ok' | 'warn' | 'danger';
 export type ModuleId =
   | 'proxmox' | 'prometheus' | 'network' | 'kuma' | 'grafana' | 'ntfy' | 'probes' | 'devices' | 'weather' | 'hostprobe'
   | 'plex' | 'sonarr' | 'radarr' | 'bazarr' | 'prowlarr' | 'chaptarr' | 'seerr' | 'qbittorrent' | 'nzbget' | 'immich' | 'wud'
-  | 'homeassistant' | 'spotlight' | 'ups' | 'unraid' | 'apt' | 'edge' | 'checks';
+  | 'homeassistant' | 'spotlight' | 'ups' | 'unraid' | 'apt' | 'edge' | 'checks' | 'restore';
 /** on: polled and shown. not-connected: listed in `modules` but missing a key or URL (the page says which). off: hidden. */
 export type ModuleState = 'on' | 'not-connected' | 'off';
 
@@ -62,6 +62,9 @@ export interface HomelabConfig {
   /** More rows for Health › Storage, each read from Prometheus (an off-site box, a cloud bucket): two PromQL queries
    *  returning bytes. Past attentionRules.diskWarnPct / diskDangerPct it turns amber / red like the other volumes. */
   storage?: StorageConfig[];
+  /** module restore: the Restore tab, a look-only list of every copy, its age, its proof and what a restore costs.
+   *  Nothing on it restores anything; the ask link only opens another app (e.g. a chat with your own bot). */
+  restore?: RestoreConfig;
   /** IANA zone for clock times on the page (e.g. 'Europe/London'). Default: TZ, else the system's zone. */
   timezone?: string;
   /** for the weather (Open-Meteo); leave out for no weather */
@@ -167,6 +170,35 @@ export interface CheckConfig {
   link?: string;
   /** a homelab.json job behind this check: the row takes the worse of the two tones and the job leaves Automation */
   job?: string;
+}
+export interface RestoreConfig {
+  /** the line under the heading (default 'Look only: nothing here restores anything.') */
+  note?: string;
+  /** how to ask for a restore: url and text take {n} (the item's number) and {id} (its id, URL-encoded in url) */
+  ask?: { url?: string; text?: string; label?: string };
+  /** a link at the foot (the paper runbook) */
+  runbook?: string;
+  items?: RestoreItemConfig[];
+}
+export interface RestoreItemConfig {
+  id: string; name: string;
+  /** PromQL: epoch seconds of the newest copy; one series or several (with several, the oldest is the item's time) */
+  newest?: string;
+  /** homelab.json job ids whose last success counts as one series each (instead of, or as well as, newest) */
+  jobs?: string[];
+  /** series expected: fewer read is flagged; unit names them ('oldest of 4/4 sources') */
+  expect?: number; unit?: string;
+  /** older than this is stale (amber); default 30 */
+  maxAgeH?: number;
+  proof?: 'restore-tested' | 'verified' | 'finished';
+  /** PromQL: epoch seconds of the last restore test; or proofOn, a fixed date (YYYY-MM-DD) */
+  proofAt?: string; proofOn?: string; proofNote?: string;
+  /** what a restore costs, free text */
+  cost?: string;
+  /** false: no ask link or text on this item */
+  ask?: boolean;
+  /** the item's own runbook link */
+  link?: string;
 }
 export interface UiConfig {
   /** the page and login title (default 'Overlook') */
@@ -623,9 +655,39 @@ export interface Snapshot {
     haUrl: string;
   };
   devices: DevicesView;
+  /** module restore (homelab.json restore.items); null when the lab has none. Look only: nothing here acts. */
+  restore: RestoreView | null;
   links: { group: string; items: { name: string; domain: string; url: string }[] }[];
   /** where the links came from: fromFile false = homelab.json's seed (never saved, or links.json unreadable: error says so) */
   linksMeta: { updatedAt: number | null; fromFile: boolean; error: string | null };
+}
+
+/** One row of the Restore tab (homelab.json restore.items, in order). Times are epoch ms; nothing is guessed. */
+export interface RestoreItemView {
+  /** 1-based position in restore.items (the {n} of the ask) */
+  n: number; id: string; name: string;
+  /** the newest copy (the oldest of its series' newest copies); null when it can't be read or none was found */
+  newest: number | null;
+  series: { read: number; expected: number | null; unit: string | null };
+  /** newest is older than maxAgeH */
+  stale: boolean;
+  /** fewer series read than expected */
+  short: boolean;
+  /** why newest is null: "can't read now" or 'none found' */
+  why: string | null;
+  proof: 'restore-tested' | 'verified' | 'finished';
+  /** the last restore test: epoch ms (proofAt) or a date 'YYYY-MM-DD' (proofOn) */
+  proofAt: number | string | null;
+  proofNote: string | null; cost: string | null;
+  /** how to ask for this restore (url and text with {n} and {id} filled in); null when the item has none */
+  ask: { url: string | null; text: string | null; label: string } | null;
+  link: string | null;
+}
+export interface RestoreView {
+  note: string; runbook: string | null;
+  /** when the Prometheus read behind the list arrived (epoch ms) */
+  readAt: number | null;
+  items: RestoreItemView[];
 }
 
 export interface RecentItem { title: string; poster?: string; sub?: string; key?: string; addedAt?: number | null }

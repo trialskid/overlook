@@ -3,6 +3,8 @@
 // seeded, so every run of the same config looks the same.
 // Everything is healthy except two amber items, so screenshots show the amber path: one firing Grafana alert (a cache
 // 91% full) and security updates waiting 20 days on one host. MOCK_CALM=1: neither (the calm Overview).
+// The Restore tab (look only, raises nothing) shows its two faults on its last two items: the next-to-last copy is past
+// its max age, the last one reads no series ("can't read now").
 import { config } from '../config.ts';
 import { dayKey, type LibraryHistory } from '../trend.ts';
 import { jobOf } from '../derive/util.ts';
@@ -126,6 +128,14 @@ function mockAll(cfg: HomelabConfig): Raw {
     return c.format === 'ago' ? now / 1000 - v : v; // an 'ago' check reads an epoch: that many seconds back
   };
 
+  // restore: every expected series a few hours old (the oldest of them older), its restore test 12 days back
+  const ri = cfg.restore?.items ?? [];
+  const restore: NonNullable<Raw['restore']> = Object.fromEntries(ri.filter(it => it?.id && (it.newest || it.proofAt)).map(it => {
+    const i = ri.indexOf(it), max = it.maxAgeH && it.maxAgeH > 0 ? it.maxAgeH : 30;
+    const ages = Array.from({ length: it.expect && it.expect > 0 ? it.expect : 1 }, (_, j) => (i === ri.length - 2 ? 1.6 * max : Math.min(max * 0.3, 8) * (0.5 + rnd(i * 7 + j) / 2)) * H);
+    return [it.id, { newest: !it.newest ? null : i === ri.length - 1 ? [] : ages.map(a => Math.round((now - a) / 1000)), proofAt: it.proofAt ? Math.round((now - 12 * D) / 1000) : null }];
+  }));
+
   // the router's device list: config infra and smart home on their own IPs, then made-up phones, laptops and TVs
   const infraIps: [string, string, string][] = [
     ...(cfg.network?.gateway ? [[cfg.network.gateway.ip, 'gateway', 'router'] as [string, string, string]] : []),
@@ -150,6 +160,7 @@ function mockAll(cfg: HomelabConfig): Raw {
   return {
     checks: Object.fromEntries((cfg.checks ?? []).map(c => [c.id, fine(c)])),
     storage: Object.fromEntries((cfg.storage ?? []).map(v => [v.name, { used: 2.1e12, total: 5e12 }])),
+    restore,
     hostStatus: Object.fromEntries(cfg.hosts.map(h => [h.id, 'up' as Status])),
     hostRes,
     guests,

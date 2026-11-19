@@ -21,6 +21,28 @@ const HA_DEFAULTS = (): NonNullable<HomelabConfig['homeAssistant']> => ({
 });
 const REQUIRED = ['domain', 'hosts', 'network'] as const;
 const validZone = (z: string) => { try { new Intl.DateTimeFormat('en-US', { timeZone: z }); return true; } catch { return false; } };
+/** restore's links open in a new tab or another app: only these schemes (no javascript:, data:, file:) */
+const LINK_SCHEMES = new Set(['https:', 'http:', 'tg:']);
+const linkOk = (u: unknown) => { try { return typeof u === 'string' && LINK_SCHEMES.has(new URL(u.replace(/\{n\}/g, '1').replace(/\{id\}/g, 'x')).protocol); } catch { return false; } };
+const PROOFS = new Set(['restore-tested', 'verified', 'finished']);
+/** homelab.json restore: a link with another scheme, an unknown proof or a repeated id can't be used. */
+function checkRestore(r: unknown) {
+  if (r == null) return;
+  const o = r as Record<string, any>;
+  if (typeof r !== 'object' || Array.isArray(r) || (o.items != null && !Array.isArray(o.items))) throw new Error('restore is not an object with an items list');
+  const bad = (what: string, u: unknown) => { if (u != null && !linkOk(u)) throw new Error(`${what} ${String(u)} is not an https, http or tg link`); };
+  bad('restore.ask.url', o.ask?.url);
+  bad('restore.runbook', o.runbook);
+  const ids = new Set<string>();
+  for (const it of (o.items ?? []) as Record<string, any>[]) {
+    if (!it || typeof it !== 'object') continue; // derive skips a half-written entry
+    bad(`restore item ${it.id} link`, it.link);
+    if (it.proof != null && !PROOFS.has(it.proof)) throw new Error(`restore item ${it.id} proof ${String(it.proof)} is not restore-tested, verified or finished`);
+    if (it.proofOn != null && !/^\d{4}-\d{2}-\d{2}$/.test(String(it.proofOn))) throw new Error(`restore item ${it.id} proofOn ${String(it.proofOn)} is not a date (YYYY-MM-DD)`);
+    if (it.id != null && ids.has(it.id)) throw new Error(`restore item id ${it.id} is used twice`);
+    ids.add(it.id);
+  }
+}
 /** A parsed homelab.json with its defaults filled in. Throws when it can't be used at all. */
 export function normalize(j: unknown): HomelabConfig {
   if (!j || typeof j !== 'object' || Array.isArray(j)) throw new Error('not a JSON object');
@@ -29,6 +51,7 @@ export function normalize(j: unknown): HomelabConfig {
   if (missing.length) throw new Error(`missing ${missing.join(', ')}`);
   if (!Array.isArray(o.hosts)) throw new Error('hosts is not a list');
   if (o.timezone != null && (typeof o.timezone !== 'string' || !validZone(o.timezone))) throw new Error(`timezone ${String(o.timezone)} is not an IANA zone (e.g. Europe/London)`);
+  checkRestore(o.restore);
   const d = DEFAULTS();
   return {
     ...d, ...o,

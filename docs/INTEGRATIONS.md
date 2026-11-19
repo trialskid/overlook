@@ -25,6 +25,7 @@ Every key should be **read-only**. Overlook only reads (GET), and no key ever re
 | `edge` | (Prometheus) | cloudflared (`cloudflared_tunnel_ha_connections`, `cloudflared_tunnel_server_locations`, `build_info`), Caddy (`caddy_config_last_reload_successful`, `…_timestamp_seconds`) and ntfy (`ntfy_messages_published_success`, `…_failure`, `ntfy_http_requests_total`) scrape jobs, named in `prometheus.jobs`. |
 | `checks` | (Prometheus) | `checks` in homelab.json. |
 | `spotlight` | (Prometheus) | `spotlight` in homelab.json. |
+| `restore` | (Prometheus) | `restore.items` in homelab.json. An item with only `jobs` reads them from your jobs' sources. |
 | `devices` | `DEVICES_FILE` (default `/app/inbox/devices.json`) | A file your own job writes (below). |
 | `weather` | (none; `WEATHER=off` to stop) | `location` in homelab.json. Open-Meteo, no key. |
 

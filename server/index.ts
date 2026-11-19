@@ -31,6 +31,7 @@ import { promHome } from './adapters/prom-home.ts';
 import { promJobs } from './adapters/prom-jobs.ts';
 import { promOps } from './adapters/prom-ops.ts';
 import { promChecks } from './adapters/prom-checks.ts';
+import { promRestore } from './adapters/prom-restore.ts';
 import { kuma, saveKumaHistory } from './adapters/kuma.ts';
 import { grafana } from './adapters/grafana.ts';
 import { ntfy, saveNtfyActivity } from './adapters/ntfy.ts';
@@ -57,7 +58,7 @@ const INDEX = 'dist/web/index.html';
 /** Changes with every deploy (the page's index.html names the hashed bundles); open tabs reload when it differs. */
 const BUILD = PROD && fs.existsSync(INDEX) ? createHash('sha1').update(fs.readFileSync(INDEX)).digest('hex').slice(0, 12) : 'dev';
 
-const ADAPTERS: Adapter[] = [proxmox, promInfra, promMedia, promHome, promJobs, promOps, promChecks, kuma, grafana, ntfy, probes, devices, tautulli, bazarr, seerr, immich, prowlarr, chaptarr, plex, wud, weather, mac];
+const ADAPTERS: Adapter[] = [proxmox, promInfra, promMedia, promHome, promJobs, promOps, promChecks, promRestore, kuma, grafana, ntfy, probes, devices, tautulli, bazarr, seerr, immich, prowlarr, chaptarr, plex, wud, weather, mac];
 /** Re-read on every use, so a config reload that changes `modules` takes effect within one round. */
 const modules = () => moduleStates(config, ADAPTERS, MOCK ? () => true : a => a.configured());
 const hub = new Hub(ADAPTERS, { mock: MOCK, dev: !PROD, enabled: a => adapterEnabled(a, modules()) });

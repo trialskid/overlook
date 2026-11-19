@@ -40,7 +40,7 @@ export function CommandPalette() {
     return [
       // the phone has its own tabs (Open; Devices under Health)
       ...((mobile ? [...visibleMTabs(snap), 'Devices'] : visibleTabs(snap)) as readonly MTab[]).map(t => item({ key: `tab-${t}`, name: `Go to ${t}`, meta: 'tab', kind: 'TAB', mono: '→', hue: 220,
-        run: t === 'Open' || t === 'Devices' ? go({ mTab: t, mScreen: 'home', selection: null }) : tab(t) }, t === 'House' ? 'home' : '')),
+        run: t === 'Open' || t === 'Devices' ? go({ mTab: t, mScreen: 'home', selection: null }) : tab(t) }, t === 'House' ? 'home' : t === 'Restore' ? 'backups copies runbook' : '')),
       // review Phase 5: the former Links and Devices tabs, where they live now on the desktop
       ...(mobile ? [] : [
         item({ key: 'tab-devices', name: 'Devices', meta: 'Health · LAN, infra and smart home', kind: 'TAB', mono: '→', hue: 220, run: tab('Health', 'health-devices') }, 'devices lan router'),

@@ -14,7 +14,7 @@ import type { Raw } from './raw.ts';
 export const MODULE_IDS = [
   'proxmox', 'prometheus', 'network', 'kuma', 'grafana', 'ntfy', 'probes', 'devices', 'weather', 'hostprobe',
   'plex', 'sonarr', 'radarr', 'bazarr', 'prowlarr', 'chaptarr', 'seerr', 'qbittorrent', 'nzbget', 'immich', 'wud',
-  'homeassistant', 'spotlight', 'ups', 'unraid', 'apt', 'edge', 'checks',
+  'homeassistant', 'spotlight', 'ups', 'unraid', 'apt', 'edge', 'checks', 'restore',
 ] as const satisfies readonly ModuleId[];
 
 /** Which modules each adapter serves (by adapter name). An adapter runs while any of its modules is on. Adapters not
@@ -27,6 +27,7 @@ export const ADAPTER_MODULES: Record<string, ModuleId[]> = {
   'prom-home': ['homeassistant'],
   'prom-ops': ['ups', 'unraid', 'apt', 'edge'],
   'prom-checks': ['checks'],
+  'prom-restore': ['restore'],
   kuma: ['kuma'], grafana: ['grafana'], ntfy: ['ntfy'], probes: ['probes'], devices: ['devices'], weather: ['weather'], mac: ['hostprobe'],
   tautulli: ['plex'], plex: ['plex'], bazarr: ['bazarr'], seerr: ['seerr'], immich: ['immich'], prowlarr: ['prowlarr'], chaptarr: ['chaptarr'], wud: ['wud'],
 };
@@ -46,6 +47,7 @@ const DESCRIBED: Partial<Record<ModuleId, (cfg: HomelabConfig) => boolean>> = {
   unraid: cfg => cfg.hosts.some(h => h.type === 'unraid'),
   ups: () => false, apt: () => false, edge: () => false,
   checks: cfg => (cfg.checks?.length ?? 0) > 0 || (cfg.storage?.length ?? 0) > 0,
+  restore: cfg => (cfg.restore?.items?.length ?? 0) > 0,
 };
 
 const adaptersOf = (adapters: Adapter[], id: ModuleId) => adapters.filter(a => ADAPTER_MODULES[a.name]?.includes(id));
@@ -86,7 +88,7 @@ export const MODULE_RAW: Partial<Record<ModuleId, (keyof Raw)[]>> = {
   edge: ['edge'],
   sonarr: ['sonarr'], radarr: ['radarr'], qbittorrent: ['qbit'], nzbget: ['nzbget'],
   homeassistant: ['ha'],
-  kuma: ['kuma'], grafana: ['grafana'], checks: ['checks', 'storage'],
+  kuma: ['kuma'], grafana: ['grafana'], checks: ['checks', 'storage'], restore: ['restore'],
 };
 /** `raw` without the slices of modules that are off (a shallow copy; `raw` itself is untouched). */
 export function gateRaw(raw: Raw, states: Record<ModuleId, ModuleState> | undefined): Raw {

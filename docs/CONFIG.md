@@ -117,6 +117,7 @@ The gateway and the switch are optional. Without them the map draws a plain trun
 | `checks` | `checks` | Your own PromQL or Uptime Kuma checks (below). |
 | `storage` | `checks` | More rows for Health › Storage from Prometheus: `{ name, used, total, sub? }`, `used` and `total` PromQL returning bytes (an off-site box, a cloud bucket). Past `diskWarnPct` / `diskDangerPct` it turns amber / red. |
 | `spotlight` | `spotlight` | One app to keep in view (below). |
+| `restore` | `restore` | The Restore tab: every copy, how old it is, what proves it restores, what a restore costs (below). Look only. |
 | `devices` | | Smart-home and other gear by IP: `{ name, ip, note, hue }`, matched against the device list. |
 | `versions` | | `[name, version, badge, asOf]` for what no source can read (router or switch firmware), shown as "manual · as of …". |
 | `attentionRules` | | Thresholds: `diskWarnPct` (85), `diskDangerPct` (95), `certWarnDays` (14), `lockBatteryWarnPct` (25), `wudUpdatesAbove` (0), `bazarrMissingSubtitlesAbove` (1000), `arrayWarnPct`, `cacheWarnPct`. |
@@ -163,6 +164,43 @@ How the row reads:
 ```
 
 A block on the Overview for the one app you care most about (an app from `apps`). It shows LAN and Public (from Kuma and the public probe) plus its own signals. A signal is a 1/0 query, and its `role` (`lan`, `public` or `other`) says which path it speaks for. A signal counts as down only once it stays 0 for 150 s; a shorter dip shows amber and raises nothing. A bare metric selector (`metric` or `metric{…}`) gets an exact 150 s window; any other expression is sampled every 15 s. With a `probeQuery`, signals older than 3 min no longer count.
+
+### restore
+
+```jsonc
+"restore": {
+  "note": "Look only: nothing here restores anything.",
+  "ask": { "url": "https://t.me/acme_desk_bot?text=restore%20{n}", "text": "send “restore {n}” to the desk bot", "label": "Restore…" },
+  "runbook": "https://git.lab.example.com/acme/lab/restore.md",
+  "items": [
+    { "id": "offsite", "name": "Off-site copy", "newest": "kopia_snapshot_last_success_timestamp_seconds",
+      "expect": 4, "unit": "sources", "proof": "restore-tested",
+      "proofAt": "kopia_restore_test_last_success_timestamp_seconds", "proofNote": "monthly drill, sample files",
+      "cost": "fetch to a side folder by hand, slow" },
+    { "id": "guests", "name": "Proxmox guests", "jobs": ["vzdump-pve1", "vzdump-pve2"], "expect": 2, "unit": "hosts",
+      "proof": "verified", "cost": "restore over the guest from Proxmox, about 10 min each" }
+  ]
+}
+```
+
+A tab with one row per copy: its number, its name, the newest copy's time and age, its proof, what a restore costs, and a link to ask for one. Nothing on it restores anything, and it raises no Needs attention item: a failed backup is already a [job](#jobs) or a Grafana alert. Without `items` the tab is hidden.
+
+| Key | What |
+|---|---|
+| `note` | The line under the heading. Default "Look only: nothing here restores anything." |
+| `ask` | How you ask for a restore: `url` (a link template), `text` (plain words shown with each row, with or without a url) and `label` (the link's text, default "Restore…"). `{n}` is the row's number (its place in `items`, from 1) and `{id}` its id (URL-encoded in `url`). The link only opens another app, such as a chat with your own bot. |
+| `runbook` | A link at the foot of the list. |
+| `items[].newest` | PromQL for the epoch seconds of the newest copy. It may return several series (one per guest, one per dataset): the row shows the oldest of them, "oldest of 10/10 guests". A value of 0 reads "none found". No series, or Prometheus not answering, reads "can't read now"; an age is never guessed. |
+| `items[].jobs` | [Job](#jobs) ids instead of (or as well as) `newest`: each job's last success counts as one series. |
+| `items[].expect`, `unit` | How many series you expect and what they are. Fewer read than expected turns the count amber ("3/4 sources read"). |
+| `items[].maxAgeH` | Older than this, the age turns amber. Default 30. |
+| `items[].proof` | `restore-tested` (green, with its date), `verified` or `finished` (shown "finished only": a fact, not a fault). Default `finished`. |
+| `items[].proofAt`, `proofOn` | When the last restore test was: `proofAt` is PromQL for epoch seconds, `proofOn` a fixed date (`YYYY-MM-DD`). A read `proofAt` wins. `proofNote`: a few words on the test. |
+| `items[].cost` | What a restore costs, in your own words. |
+| `items[].ask` | `false`: this row gets no ask link or text. |
+| `items[].link` | The row's own runbook link (on its name). |
+
+`ask.url`, `runbook` and `link` must be `https:`, `http:` or `tg:` links; anything else, an unknown `proof`, a `proofOn` that isn't a date or a repeated `id` makes the config unusable (on a reload the old one stays). The queries run through Prometheus every 60 s, GET only.
 
 ## The page (`ui`)
 
